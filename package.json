@@ -1,0 +1,46 @@
+{
+  "name": "combobulator",
+  "version": "0.1.0",
+  "description": "Unify local chat memory across Claude Code, Codex, and Cursor — your prompts and assistant replies follow you across tools.",
+  "type": "module",
+  "bin": {
+    "combobulate": "bin/combobulate.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node bin/combobulate.js",
+    "daemon": "node bin/combobulate.js daemon",
+    "test": "node test-e2e.mjs && node test-daemon.mjs",
+    "prepublishOnly": "npm test"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "codex",
+    "cursor",
+    "chat-history",
+    "memory",
+    "sync",
+    "cli",
+    "developer-tools"
+  ],
+  "os": ["darwin"],
+  "license": "MIT",
+  "author": "Panchangam18",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Panchangam18/combobulator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Panchangam18/combobulator/issues"
+  },
+  "homepage": "https://github.com/Panchangam18/combobulator#readme"
+}
