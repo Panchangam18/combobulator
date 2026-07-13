@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { PATHS } from '../config.js';
 import { info } from '../log.js';
 
-export async function uninstall() {
+export async function stop() {
   for (const plist of [PATHS.launchdPlist, PATHS.legacyLaunchdPlist]) {
     if (!fs.existsSync(plist)) continue;
     try {
@@ -12,5 +12,5 @@ export async function uninstall() {
     fs.unlinkSync(plist);
     info(`removed launchd plist at ${plist}`);
   }
-  info('uninstall complete. State at ~/.combobulator is preserved — delete it manually if you want a clean slate.');
+  info('stopped. State at ~/.combobulator is preserved; use discombobulate --all to remove mirrored chats.');
 }

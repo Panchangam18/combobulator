@@ -1,6 +1,6 @@
 {
   "name": "combobulator",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Unify local chat memory across Claude Code, Codex, and Cursor — your prompts and assistant replies follow you across tools.",
   "type": "module",
   "bin": {

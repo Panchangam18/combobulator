@@ -39,10 +39,10 @@ export async function doctor() {
         add('WARN', 'daemon', `loaded but not running — try: launchctl kickstart -k gui/$(id -u)/${LAUNCHD_LABEL}`);
       }
     } else {
-      add('FAIL', 'daemon', 'plist present but not loaded — try: combobulator install');
+      add('FAIL', 'daemon', 'plist present but not loaded — try: combobulator combobulate');
     }
   } else {
-    add('FAIL', 'daemon', 'not installed — run: combobulator install');
+    add('FAIL', 'daemon', 'not running — run: combobulator combobulate');
   }
 
   // 2. watched source paths

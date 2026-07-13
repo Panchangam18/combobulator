@@ -1,5 +1,5 @@
-import { install } from './commands/install.js';
-import { uninstall } from './commands/uninstall.js';
+import { combobulate } from './commands/install.js';
+import { stop } from './commands/uninstall.js';
 import { status } from './commands/status.js';
 import { sync } from './commands/sync.js';
 import { fixCodexProjects } from './commands/fix-codex-projects.js';
@@ -13,19 +13,19 @@ USAGE
   combobulator <command> [options]
 
 COMMANDS
-  install           Set up the background daemon (launchd agent on macOS) and
+  combobulate       Set up the background daemon (launchd agent on macOS) and
                     start mirroring new sessions from now on.
-  uninstall         Remove the launchd agent. State at ~/.combobulator is kept.
+  stop              Stop and remove the launchd agent. Sync state is kept.
   daemon            Run the watcher in the foreground (used by launchd).
   status            Show what's installed, last mirrored sessions, watched paths.
   sync [opts]       One-shot mirror pass over recent sessions.
-                    --all                ignore install epoch (mirror anything new-looking)
+                    --all                ignore service start time
                     --since-hours=N      look back N hours (default 24)
                     --limit=N            max sessions per source (default 20)
                     --dry-run            log what would be mirrored, write nothing
   fix-codex-projects
                     Register every cwd from existing mirrors in Codex Desktop's
-                    workspace list. Called automatically by install; rerun if
+                    workspace list. Called automatically by combobulate; rerun if
                     Codex stopped surfacing a synced project.
   discombobulate [--dry-run] [--all]
                     Remove broken Codex thread rows we created (source='unknown'
@@ -66,8 +66,10 @@ export async function main(argv) {
   const cmd = args._[0] || 'help';
 
   switch (cmd) {
-    case 'install':    return install();
-    case 'uninstall':  return uninstall();
+    case 'combobulate':
+    case 'install': return combobulate();
+    case 'stop':
+    case 'uninstall': return stop();
     case 'daemon':     return runDaemon();
     case 'status':     return status();
     case 'fix-codex-projects': return fixCodexProjects();

@@ -40,7 +40,7 @@ function plistXml({ nodeBin, scriptPath, logPath }) {
 `;
 }
 
-export async function install() {
+export async function combobulate() {
   fs.mkdirSync(PATHS.combobulateDir, { recursive: true });
   fs.mkdirSync(PATHS.combobulateSynced, { recursive: true });
   fs.mkdirSync(path.dirname(PATHS.launchdPlist), { recursive: true });
@@ -86,7 +86,7 @@ export async function install() {
     warn(`fix-codex-projects failed: ${e.message}`);
   }
 
-  info('install complete.');
+  info('combobulation complete.');
   info(`  state:  ${PATHS.combobulateState}`);
   info(`  log:    ${PATHS.combobulateLog}`);
   info(`  synced: ${PATHS.combobulateSynced}`);

@@ -19,17 +19,17 @@ direction. Mirrored chats keep their project, title, messages, and timestamps.
 
 ```bash
 npm install -g combobulator
-combobulator install
+combobulator combobulate
 ```
 
-`combobulator install` starts the launchd agent and configures it to run after
+`combobulator combobulate` starts the launchd agent and configures it to run after
 login. Only chats created or updated after installation are synced by default.
 
 To install from a local clone instead:
 
 ```bash
 npm install -g .
-combobulator install
+combobulator combobulate
 ```
 
 ## Supported tools
@@ -49,16 +49,16 @@ are available through the Claude Code CLI and its VS Code or Cursor extensions.
 ## Commands
 
 ```bash
-combobulator install
-combobulator uninstall
+combobulator combobulate
+combobulator stop
 combobulator status
 combobulator doctor
 combobulator sync
 combobulator discombobulate --all
 ```
 
-- `install` installs and starts the background service.
-- `uninstall` stops and removes the background service. Sync state is preserved.
+- `combobulate` installs and starts the background service.
+- `stop` stops and removes the background service. Sync state is preserved.
 - `status` shows daemon, path, and recent sync information.
 - `doctor` checks the installation and reports repair commands.
 - `sync` runs a one-time sync without the daemon.
