@@ -30,6 +30,18 @@ export const POLL_INTERVAL_MS = 1500;
 // Mirror marker — embedded in every synced session so we don't mirror our own writes.
 export const MIRROR_MARKER = '__combobulate_mirror__';
 
+const IGNORED_CWD_PREFIXES = [
+  path.join(HOME, 'Library', 'Application Support', 'CodexBar', 'ClaudeProbe'),
+];
+
+export function isIgnoredCwd(cwd) {
+  if (!cwd || !cwd.startsWith('/')) return false;
+  const normalized = path.normalize(cwd);
+  return IGNORED_CWD_PREFIXES.some((ignored) => (
+    normalized === ignored || normalized.startsWith(`${ignored}${path.sep}`)
+  ));
+}
+
 // Encode an absolute filesystem path the way Claude Code does for ~/.claude/projects/<encoded>/.
 // Claude replaces every '/' (and leading slash) with '-' and drops the leading dash on root.
 // E.g. /Users/madhavan/foo -> -Users-madhavan-foo

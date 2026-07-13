@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { PATHS } from '../config.js';
+import { PATHS, isIgnoredCwd } from '../config.js';
 import { info } from '../log.js';
 import { loadState, saveState, getMirror, setMirror, fingerprintMessages } from '../state.js';
 import { listClaudeSessions, readClaudeSession } from '../sources/claude.js';
@@ -23,6 +23,7 @@ export async function sync({ all = false, sinceHours = 24, limit = 20, dryRun = 
     if (meta.mtime < cutoff) continue;
     try {
       const s = await readClaudeSession(meta.path);
+      if (isIgnoredCwd(s.cwd)) continue;
       if (!s.isMirror && s.messages.length) sessions.push(s);
     } catch (e) { /* ignore */ }
   }
@@ -30,6 +31,7 @@ export async function sync({ all = false, sinceHours = 24, limit = 20, dryRun = 
     if (meta.mtime < cutoff) continue;
     try {
       const s = await readCodexSession(meta.path);
+      if (isIgnoredCwd(s.cwd)) continue;
       if (!s.isMirror && s.messages.length) sessions.push(s);
     } catch (e) { /* ignore */ }
   }
@@ -39,6 +41,7 @@ export async function sync({ all = false, sinceHours = 24, limit = 20, dryRun = 
       for (const c of composers.slice(0, limit)) {
         if (c.updatedAt < cutoff) continue;
         const s = await readCursorComposer(c.id);
+        if (isIgnoredCwd(s?.cwd)) continue;
         if (s && !s.isMirror && s.messages.length) sessions.push(s);
       }
     } catch (e) { info(`cursor scan failed: ${e.message}`); }

@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
-import { HOME } from './config.js';
+import { HOME, isIgnoredCwd } from './config.js';
 import { info, warn } from './log.js';
 
 const execFileP = promisify(execFile);
@@ -24,6 +24,7 @@ const STATE_FILE = path.join(HOME, '.codex', '.codex-global-state.json');
 // already-tracked cwd doesn't cause focus theft.
 export async function registerCodexWorkspaceRoot(cwd) {
   if (!cwd || !cwd.startsWith('/')) return false;
+  if (isIgnoredCwd(cwd)) return false;
   if (!fs.existsSync(cwd)) return false;
   if (isAlreadyRegistered(cwd)) return false;
 

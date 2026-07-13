@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { PATHS, POLL_INTERVAL_MS } from './config.js';
+import { PATHS, POLL_INTERVAL_MS, isIgnoredCwd } from './config.js';
 import { info, warn, error, debug } from './log.js';
 import { loadState, saveState, getMirror, setMirror, fingerprintMessages } from './state.js';
 import { listClaudeSessions, readClaudeSession } from './sources/claude.js';
@@ -44,6 +44,7 @@ function markCursorScanned(state, composer, session) {
 
 // Mirror a single normalized session to every other tool. Skip self and skip mirrors.
 async function mirrorSession(session) {
+  if (isIgnoredCwd(session.cwd)) return;
   if (session.isMirror) return;
   if (!session.messages.length) return;
 

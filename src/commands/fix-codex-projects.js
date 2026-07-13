@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { PATHS } from '../config.js';
+import { PATHS, isIgnoredCwd } from '../config.js';
 import { info, warn } from '../log.js';
 import { registerCodexWorkspaceRoot } from '../codex-registry.js';
 import { upsertCodexThread } from '../codex-thread-db.js';
@@ -30,9 +30,9 @@ export async function fixCodexProjects() {
     if (!meta?.isMirror) continue;
     mirrorCount++;
 
-    if (meta.cwd) cwds.add(meta.cwd);
+    if (meta.cwd && !isIgnoredCwd(meta.cwd)) cwds.add(meta.cwd);
 
-    if (meta.sessionId && meta.cwd) {
+    if (meta.sessionId && meta.cwd && !isIgnoredCwd(meta.cwd)) {
       const stat = fs.statSync(f);
       const ok = upsertCodexThread({
         sessionId: meta.sessionId,
