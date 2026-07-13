@@ -21,7 +21,7 @@ function walk(dir, out) {
     else if (e.isFile() && e.name.endsWith('.jsonl') && e.name.startsWith('rollout-')) {
       try {
         const s = fs.statSync(full);
-        out.push({ path: full, mtime: s.mtimeMs });
+        out.push({ path: full, mtime: s.mtimeMs, size: s.size });
       } catch {}
     }
   }

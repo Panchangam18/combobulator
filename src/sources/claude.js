@@ -17,7 +17,7 @@ export function listClaudeSessions() {
       const fp = path.join(full, f);
       try {
         const s = fs.statSync(fp);
-        out.push({ path: fp, mtime: s.mtimeMs, projDir });
+        out.push({ path: fp, mtime: s.mtimeMs, size: s.size, projDir });
       } catch {}
     }
   }

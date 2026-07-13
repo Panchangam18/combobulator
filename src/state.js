@@ -14,13 +14,19 @@ import { PATHS } from './config.js';
 //          codex?: { sessionId, filePath }
 //        }
 //     }
+//   },
+//   scannedFiles: {
+//     "<absolute path>": { mtime, size, source, sessionId, isMirror }
+//   },
+//   scannedCursorComposers: {
+//     "<composer id>": { updatedAt, source, sessionId }
 //   }
 // }
 
 let cache = null;
 
 function emptyState() {
-  return { epoch: Date.now(), mirrors: {} };
+  return { epoch: Date.now(), mirrors: {}, scannedFiles: {}, scannedCursorComposers: {} };
 }
 
 export function loadState() {
@@ -29,6 +35,8 @@ export function loadState() {
     const raw = fs.readFileSync(PATHS.combobulateState, 'utf8');
     cache = JSON.parse(raw);
     if (!cache.mirrors) cache.mirrors = {};
+    if (!cache.scannedFiles) cache.scannedFiles = {};
+    if (!cache.scannedCursorComposers) cache.scannedCursorComposers = {};
     if (!cache.epoch) cache.epoch = Date.now();
   } catch {
     cache = emptyState();
