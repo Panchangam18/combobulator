@@ -94,6 +94,13 @@ histories are left untouched rather than merged automatically.
 Mirrored titles include `[Claude Code]`, `[Codex]`, or `[Cursor]` so their source
 is visible in resume lists.
 
+ChatGPT Desktop does not currently expose a background refresh API for chats
+created or updated outside its own app-server process. Mirrors are updated on
+disk immediately, but an already-running ChatGPT app may need to be restarted
+before its cached task list or transcript reflects those changes. Combobulator
+does not automatically open or reload ChatGPT because doing so can interrupt
+active work.
+
 ## Troubleshooting
 
 Start with:
