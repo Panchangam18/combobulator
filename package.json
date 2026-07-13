@@ -4,14 +4,14 @@
   "description": "Unify local chat memory across Claude Code, Codex, and Cursor — your prompts and assistant replies follow you across tools.",
   "type": "module",
   "bin": {
-    "combobulate": "bin/combobulate.js"
+    "combobulator": "bin/combobulator.js"
   },
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "start": "node bin/combobulate.js",
-    "daemon": "node bin/combobulate.js daemon",
+    "start": "node bin/combobulator.js",
+    "daemon": "node bin/combobulator.js daemon",
     "test": "node test-e2e.mjs && node test-daemon.mjs",
     "prepublishOnly": "npm test"
   },

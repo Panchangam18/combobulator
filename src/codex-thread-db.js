@@ -37,7 +37,7 @@ export function upsertCodexThread({
     // and tokens_used to a positive estimate. This matches what Codex itself
     // writes for "real" threads.
     const fum = (firstUserMessage || '').slice(0, 2000);
-    const preview = fum ? fum.slice(0, 200) : 'Synced from combobulate';
+    const preview = fum ? fum.slice(0, 200) : 'Synced from combobulator';
     const tokens = Math.max(1, approxTokens || Math.ceil(fum.length / 4));
 
     const stmt = db.prepare(`
@@ -57,7 +57,7 @@ export function upsertCodexThread({
       Math.floor(createdAtMs / 1000),
       Math.floor(updatedAtMs / 1000),
       cwd,
-      (title || 'Synced from combobulate').slice(0, 200),
+      (title || 'Synced from combobulator').slice(0, 200),
       fum,
       preview,
       tokens,

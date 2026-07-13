@@ -10,14 +10,14 @@ import os from 'node:os';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 
-const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'combobulate-e2e-'));
+const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'combobulator-e2e-'));
 console.log(`test root: ${ROOT}`);
 
 // We need to override the PATHS constants. The simplest reliable way is to set
 // HOME (and the Cursor path env if we cared, but we don't here) before importing
 // the modules under test.
 process.env.HOME = ROOT;
-process.env.COMBOBULATE_DEBUG = '1';
+process.env.COMBOBULATOR_DEBUG = '1';
 
 const { PATHS, encodeClaudeProjectDir } = await import('./src/config.js');
 const { readCodexSession } = await import('./src/sources/codex.js');
@@ -78,7 +78,7 @@ console.log('✓ claude history.jsonl entry written');
 const codexResult = writeCodexMirror(codexSession);
 assert.ok(fs.existsSync(codexResult.filePath), 'codex mirror file should exist');
 const codexReadBack = await readCodexSession(codexResult.filePath);
-assert.equal(codexReadBack.isMirror, true, 'codex mirror should be detected (originator=combobulate OR marker)');
+assert.equal(codexReadBack.isMirror, true, 'codex mirror should be detected (originator or marker)');
 console.log('✓ codex sink wrote mirror + mirror detection works');
 
 // --- Verify codex session_index entry was appended ---

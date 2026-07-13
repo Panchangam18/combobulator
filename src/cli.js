@@ -7,15 +7,15 @@ import { cleanup } from './commands/cleanup.js';
 import { doctor } from './commands/doctor.js';
 import { runDaemon } from './daemon.js';
 
-const HELP = `combobulate — unify chat history across Claude Code, Codex, and Cursor
+const HELP = `combobulator — unify chat history across Claude Code, Codex, and Cursor
 
 USAGE
-  combobulate <command> [options]
+  combobulator <command> [options]
 
 COMMANDS
   install           Set up the background daemon (launchd agent on macOS) and
                     start mirroring new sessions from now on.
-  uninstall         Remove the launchd agent. State at ~/.combobulate is kept.
+  uninstall         Remove the launchd agent. State at ~/.combobulator is kept.
   daemon            Run the watcher in the foreground (used by launchd).
   status            Show what's installed, last mirrored sessions, watched paths.
   sync [opts]       One-shot mirror pass over recent sessions.
@@ -44,7 +44,7 @@ How it works
   Cursor is read-only — its sqlite chat DB is locked while the app runs.
   Claude Desktop's "Claude Code" tab is cloud-backed and out of scope; the
   Claude CLI, VS Code extension, Cursor extension, Codex CLI, and Codex Desktop
-  all see the synced chats. Run \`combobulate doctor\` if something looks off.
+  all see the synced chats. Run \`combobulator doctor\` if something looks off.
 `;
 
 function parseArgs(argv) {

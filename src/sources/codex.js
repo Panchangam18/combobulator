@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
-import { PATHS, MIRROR_MARKER } from '../config.js';
+import { PATHS, MIRROR_MARKER, isMirrorMarker } from '../config.js';
 
 // Walk ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl recursively.
 export function listCodexSessions() {
@@ -45,7 +45,7 @@ export async function readCodexSession(filePath) {
     try { d = JSON.parse(line); } catch { continue; }
 
     // Old top-level marker (legacy rollout format) — still detect for cleanup
-    if (d[MIRROR_MARKER]) { isMirror = true; continue; }
+    if (isMirrorMarker(d)) { isMirror = true; continue; }
 
     if (d.timestamp) {
       const t = Date.parse(d.timestamp);
@@ -60,7 +60,7 @@ export async function readCodexSession(filePath) {
       if (d.payload?.cwd) cwd = d.payload.cwd;
       // Detect new and legacy marker locations.
       if (d.payload?.originator === 'combobulate') isMirror = true;
-      if (d.payload?.combobulate?.[MIRROR_MARKER]) isMirror = true;
+      if (isMirrorMarker(d.payload?.combobulate) || isMirrorMarker(d.payload?.combobulator)) isMirror = true;
     } else if (d.type === 'event_msg') {
       const p = d.payload;
       if (p?.type === 'user_message' && typeof p.message === 'string') {

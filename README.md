@@ -1,4 +1,4 @@
-# combobulate
+# combobulator
 
 Unify local chat memory across **Claude Code**, **Codex**, and **Cursor**.
 
@@ -6,7 +6,7 @@ Each desktop AI coding tool keeps its chat history in its own format on your dis
 If you ask Codex a question and want to pick the conversation up in Claude Code,
 there's normally no way to do it — no shared history.
 
-`combobulate` is a small macOS daemon that watches each tool's session storage
+`combobulator` is a small macOS daemon that watches each tool's session storage
 and mirrors new chats across the others. Open the same project in any of the
 three tools and you'll see the chats you started elsewhere, with proper titles,
 timestamps, and tool-call rendering native to that tool.
@@ -18,23 +18,21 @@ Requires **Node.js ≥ 22** (uses the built-in `node:sqlite` module) and **macOS
 
 ```bash
 # from a clone
-git clone https://github.com/<you>/combobulate ~/combobulate
-cd ~/combobulate
+git clone https://github.com/Panchangam18/combobulator ~/combobulator
+cd ~/combobulator
 npm install -g .
-combobulate install
+combobulator install
 ```
 
 Or, once published:
 
 ```bash
-npm install -g combobulator   # the npm package name (the `combobulate` bare
-                              # name was already taken on npm — the CLI
-                              # binary is still `combobulate`)
-combobulate install
+npm install -g combobulator
+combobulator install
 ```
 
-`combobulate install` writes a launchd plist at
-`~/Library/LaunchAgents/com.combobulate.daemon.plist` and loads it. From now on,
+`combobulator install` writes a launchd plist at
+`~/Library/LaunchAgents/com.combobulator.daemon.plist` and loads it. From now on,
 every new chat in any of the three tools mirrors to the others within ~1.5s, and
 the daemon restarts automatically on every login.
 
@@ -55,7 +53,7 @@ the daemon restarts automatically on every login.
 ```
                    ┌──────────────┐
    Claude Code ──► │              │ ──► Claude Code
-                   │  combobulate │
+                   │  combobulator │
    Codex ────────► │   daemon     │ ──► Codex
                    │              │
    Cursor ───────► │  (poll @1.5s)│     Cursor (write deferred)
@@ -73,7 +71,7 @@ For each session newer than the install epoch the daemon:
 
 1. **Normalizes** it into a tool-agnostic typed event stream: real user prompts,
    assistant text responses, tool calls (with input/output), tool results.
-2. **Detects mirrors** via a `__combobulate_mirror__` marker baked into every file
+2. **Detects mirrors** via a `__combobulator_mirror__` marker baked into every file
    we write, so we never re-mirror our own writes.
 3. **Fingerprints** the message stream — skips if nothing has changed since the
    last sync. Same source updating? Overwrite the same mirror file in place.
@@ -99,34 +97,34 @@ For Codex Desktop specifically, the daemon also:
 ## Commands
 
 ```bash
-combobulate install        # set up the launchd agent, start the daemon
-combobulate uninstall      # remove the launchd agent (state in ~/.combobulate is kept)
-combobulate daemon         # run the watcher in the foreground (used by launchd)
-combobulate status         # quick state summary
-combobulate doctor         # diagnose: daemon, paths, state, recent errors
-combobulate sync           # one-shot mirror pass (doesn't need the daemon)
+combobulator install        # set up the launchd agent, start the daemon
+combobulator uninstall      # remove the launchd agent (state in ~/.combobulator is kept)
+combobulator daemon         # run the watcher in the foreground (used by launchd)
+combobulator status         # quick state summary
+combobulator doctor         # diagnose: daemon, paths, state, recent errors
+combobulator sync           # one-shot mirror pass (doesn't need the daemon)
    --all                   # ignore the install epoch
    --since-hours=N         # default 24
    --limit=N               # max sessions per source, default 20
    --dry-run               # log what would mirror, write nothing
-combobulate fix-codex-projects
+combobulator fix-codex-projects
                            # re-register all mirror cwds with Codex Desktop
-combobulate cleanup        # remove broken Codex thread rows we created
+combobulator cleanup        # remove broken Codex thread rows we created
    --dry-run               # list what would be deleted
-combobulate help
+combobulator help
 ```
 
-**First-time troubleshooting**: run `combobulate doctor`. If it reports
+**First-time troubleshooting**: run `combobulator doctor`. If it reports
 problems, the message tells you the exact recovery command.
 
-## Files combobulate touches
+## Files Combobulator Touches
 
 | Location | What |
 |---|---|
-| `~/.combobulate/state.json` | mirror tracking (source fingerprint → target ids/paths) |
-| `~/.combobulate/daemon.log` | daemon log |
-| `~/.combobulate/synced/` | fallback cwd for sourceless sessions (Cursor) |
-| `~/Library/LaunchAgents/com.combobulate.daemon.plist` | launchd entry |
+| `~/.combobulator/state.json` | mirror tracking (source fingerprint → target ids/paths) |
+| `~/.combobulator/daemon.log` | daemon log |
+| `~/.combobulator/synced/` | fallback cwd for sourceless sessions (Cursor) |
+| `~/Library/LaunchAgents/com.combobulator.daemon.plist` | launchd entry |
 | `~/.claude/projects/<cwd>/<uuid>.jsonl` | mirrored Claude sessions |
 | `~/.claude/history.jsonl` | up-arrow entries prefixed `[Codex]` / `[Cursor]` |
 | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` | mirrored Codex rollouts |
@@ -135,15 +133,15 @@ problems, the message tells you the exact recovery command.
 | `~/.codex/history.jsonl` | up-arrow entries prefixed `[Claude Code]` / `[Cursor]` |
 | `~/.codex/.codex-global-state.json` | workspace-roots additions (one-time per cwd) |
 
-Every mirrored Claude session has a `__combobulate_mirror__` marker on line 1.
-Every mirrored Codex rollout has it nested at `session_meta.payload.combobulate`.
+Every mirrored Claude session has a `__combobulator_mirror__` marker on line 1.
+Every mirrored Codex rollout has it nested at `session_meta.payload.combobulator`.
 That's our loop-prevention key. To wipe all mirrors:
 
 ```bash
-combobulate uninstall
-grep -rl __combobulate_mirror__ ~/.claude/projects ~/.codex/sessions | xargs rm
-combobulate cleanup    # remove dangling DB rows (still requires Node 22+)
-rm -rf ~/.combobulate
+combobulator uninstall
+grep -rl __combobulator_mirror__ ~/.claude/projects ~/.codex/sessions | xargs rm
+combobulator cleanup    # remove dangling DB rows (still requires Node 22+)
+rm -rf ~/.combobulator
 ```
 
 ## Known limitations
@@ -173,8 +171,8 @@ rm -rf ~/.combobulate
 
 ```bash
 npm test                       # runs test-e2e.mjs + test-daemon.mjs in a tmp HOME
-COMBOBULATE_DEBUG=1 combobulate daemon
-tail -f ~/.combobulate/daemon.log
+COMBOBULATOR_DEBUG=1 combobulator daemon
+tail -f ~/.combobulator/daemon.log
 ```
 
 The architecture (sources, sinks, daemon orchestrator) is documented in code.

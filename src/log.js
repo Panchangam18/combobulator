@@ -25,5 +25,5 @@ export const info = (...a) => log('INFO', ...a);
 export const warn = (...a) => log('WARN', ...a);
 export const error = (...a) => log('ERROR', ...a);
 export const debug = (...a) => {
-  if (process.env.COMBOBULATE_DEBUG) log('DEBUG', ...a);
+  if (process.env.COMBOBULATOR_DEBUG || process.env.COMBOBULATE_DEBUG) log('DEBUG', ...a);
 };

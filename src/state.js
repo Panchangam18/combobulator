@@ -32,7 +32,10 @@ function emptyState() {
 export function loadState() {
   if (cache) return cache;
   try {
-    const raw = fs.readFileSync(PATHS.combobulateState, 'utf8');
+    const statePath = fs.existsSync(PATHS.combobulateState)
+      ? PATHS.combobulateState
+      : PATHS.legacyCombobulateState;
+    const raw = fs.readFileSync(statePath, 'utf8');
     cache = JSON.parse(raw);
     if (!cache.mirrors) cache.mirrors = {};
     if (!cache.scannedFiles) cache.scannedFiles = {};

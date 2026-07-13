@@ -39,10 +39,10 @@ export async function doctor() {
         add('WARN', 'daemon', `loaded but not running — try: launchctl kickstart -k gui/$(id -u)/${LAUNCHD_LABEL}`);
       }
     } else {
-      add('FAIL', 'daemon', 'plist present but not loaded — try: combobulate install');
+      add('FAIL', 'daemon', 'plist present but not loaded — try: combobulator install');
     }
   } else {
-    add('FAIL', 'daemon', 'not installed — run: combobulate install');
+    add('FAIL', 'daemon', 'not installed — run: combobulator install');
   }
 
   // 2. watched source paths
@@ -79,7 +79,7 @@ export async function doctor() {
       const db = new DatabaseSync(codexDb);
       const unknown = db.prepare(`SELECT COUNT(*) AS n FROM threads WHERE source='unknown' AND archived=0`).get();
       if (unknown.n > 0) {
-        add('WARN', 'codex threads', `${unknown.n} row(s) flagged 'unknown' — run: combobulate cleanup`);
+        add('WARN', 'codex threads', `${unknown.n} row(s) flagged 'unknown' — run: combobulator cleanup`);
       } else {
         add('OK', 'codex threads', 'all rows look healthy');
       }
@@ -107,7 +107,7 @@ export async function doctor() {
   }
 
   // print results
-  console.log('\ncombobulate doctor');
+  console.log('\ncombobulator doctor');
   console.log('==================');
   for (const c of checks) {
     const tag = c.status === 'OK' ? '\x1b[32mOK  \x1b[0m' : c.status === 'WARN' ? '\x1b[33mWARN\x1b[0m' : '\x1b[31mFAIL\x1b[0m';

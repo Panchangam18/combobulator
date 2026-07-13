@@ -3,6 +3,5 @@ node_modules/
 .DS_Store
 .claude/settings.json
 .claude/settings.local.json
-.combobulate-test/
+.combobulator-test/
 *.tgz
-

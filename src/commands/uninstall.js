@@ -4,14 +4,13 @@ import { PATHS } from '../config.js';
 import { info } from '../log.js';
 
 export async function uninstall() {
-  if (fs.existsSync(PATHS.launchdPlist)) {
+  for (const plist of [PATHS.launchdPlist, PATHS.legacyLaunchdPlist]) {
+    if (!fs.existsSync(plist)) continue;
     try {
-      execFileSync('launchctl', ['unload', PATHS.launchdPlist], { stdio: 'ignore' });
+      execFileSync('launchctl', ['unload', plist], { stdio: 'ignore' });
     } catch {}
-    fs.unlinkSync(PATHS.launchdPlist);
-    info(`removed launchd plist at ${PATHS.launchdPlist}`);
-  } else {
-    info('no launchd plist to remove.');
+    fs.unlinkSync(plist);
+    info(`removed launchd plist at ${plist}`);
   }
-  info('uninstall complete. State at ~/.combobulate is preserved — delete it manually if you want a clean slate.');
+  info('uninstall complete. State at ~/.combobulator is preserved — delete it manually if you want a clean slate.');
 }

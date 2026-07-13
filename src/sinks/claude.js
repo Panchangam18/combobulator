@@ -74,7 +74,7 @@ export function writeClaudeMirror(session, { existingSessionId, existingFilePath
         uuid,
         timestamp: iso,
         userType: 'external',
-        entrypoint: 'combobulate',
+        entrypoint: 'combobulator',
         cwd,
         sessionId,
         version: '2.1.111',

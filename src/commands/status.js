@@ -4,7 +4,7 @@ import { PATHS, LAUNCHD_LABEL } from '../config.js';
 import { loadState } from '../state.js';
 
 export async function status() {
-  console.log('combobulate status');
+  console.log('combobulator status');
   console.log('==================');
   console.log(`state file:  ${PATHS.combobulateState}`);
   console.log(`log file:    ${PATHS.combobulateLog}`);

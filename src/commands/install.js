@@ -8,8 +8,8 @@ import { info, warn } from '../log.js';
 import { fixCodexProjects } from './fix-codex-projects.js';
 
 function findEntrypoint() {
-  // bin/combobulate.js relative to this file (src/commands/install.js -> ../../bin/combobulate.js)
-  return path.resolve(fileURLToPath(import.meta.url), '..', '..', '..', 'bin', 'combobulate.js');
+  // bin/combobulator.js relative to this file (src/commands/install.js -> ../../bin/combobulator.js)
+  return path.resolve(fileURLToPath(import.meta.url), '..', '..', '..', 'bin', 'combobulator.js');
 }
 
 function plistXml({ nodeBin, scriptPath, logPath }) {
@@ -61,6 +61,12 @@ export async function install() {
   info(`wrote launchd plist at ${PATHS.launchdPlist}`);
 
   // Reload via launchctl. We unload first (ignore failure if not loaded), then load.
+  if (fs.existsSync(PATHS.legacyLaunchdPlist)) {
+    try {
+      execFileSync('launchctl', ['unload', PATHS.legacyLaunchdPlist], { stdio: 'ignore' });
+    } catch {}
+    fs.unlinkSync(PATHS.legacyLaunchdPlist);
+  }
   try {
     execFileSync('launchctl', ['unload', PATHS.launchdPlist], { stdio: 'ignore' });
   } catch {}
@@ -69,7 +75,7 @@ export async function install() {
     info('launchd agent loaded — daemon will start now and on every login.');
   } catch (e) {
     warn(`launchctl load failed: ${e.message}`);
-    warn('You can run the daemon manually with: combobulate daemon');
+    warn('You can run the daemon manually with: combobulator daemon');
   }
 
   // Backfill any pre-existing mirrors into Codex Desktop's workspace registry,

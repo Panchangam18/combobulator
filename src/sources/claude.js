@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
-import { PATHS, MIRROR_MARKER } from '../config.js';
+import { PATHS, isMirrorMarker } from '../config.js';
 
 // Walk ~/.claude/projects/*/{sessionId}.jsonl. Return [{path, mtime}] sorted newest first.
 export function listClaudeSessions() {
@@ -52,7 +52,7 @@ export async function readClaudeSession(filePath) {
     let d;
     try { d = JSON.parse(line); } catch { continue; }
 
-    if (d[MIRROR_MARKER]) { isMirror = true; continue; }
+    if (isMirrorMarker(d)) { isMirror = true; continue; }
 
     if (d.sessionId && !sessionId) sessionId = d.sessionId;
     if (d.cwd && !cwd) cwd = d.cwd;

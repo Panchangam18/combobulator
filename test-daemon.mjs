@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import assert from 'node:assert/strict';
 
-const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'combobulate-daemon-'));
+const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'combobulator-daemon-'));
 process.env.HOME = ROOT;
 
 const { PATHS } = await import('./src/config.js');

@@ -1,19 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { PATHS, HOME, MIRROR_MARKER } from '../config.js';
+import { PATHS, HOME, isMirrorMarker } from '../config.js';
 import { info, warn } from '../log.js';
 
 const CODEX_DB = path.join(HOME, '.codex', 'state_5.sqlite');
 
-// Sweep any combobulate-authored rows that Codex's app-server has flipped to
+// Sweep any Combobulator-authored rows that Codex's app-server has flipped to
 // source='unknown' (typically rollouts written before the format was
 // production-correct), plus orphaned thread rows whose rollout_path no longer
-// exists on disk. Safe to run anytime — only touches combobulate-authored rows.
+// exists on disk. Safe to run anytime — only touches Combobulator-authored rows.
 //
 // What we DON'T touch: rollout files themselves, claude session files, your
 // own non-mirror Codex threads. If you need a truly clean slate use
-// `combobulate uninstall && rm -rf ~/.combobulate`.
+// `combobulator uninstall && rm -rf ~/.combobulator`.
 export async function cleanup({ dryRun = false } = {}) {
   if (!fs.existsSync(CODEX_DB)) {
     info('Codex state_5.sqlite not present — nothing to clean up.');
@@ -49,7 +49,7 @@ export async function cleanup({ dryRun = false } = {}) {
   }
 
   info(`scanned ${rows.length} threads.`);
-  info(`  combobulate-authored: ${combobulateConfirmed}`);
+  info(`  combobulator-authored: ${combobulateConfirmed}`);
   info(`  to delete: ${toDelete.length} (${orphaned} orphaned, ${unknownSource} unknown-source)`);
 
   if (!toDelete.length) {
@@ -89,10 +89,10 @@ function looksLikeCombobulateRollout(filePath) {
       if (!line) continue;
       let d;
       try { d = JSON.parse(line); } catch { continue; }
-      if (d[MIRROR_MARKER]) return true;
+      if (isMirrorMarker(d)) return true;
       if (d.type === 'session_meta') {
         if (d.payload?.originator === 'combobulate') return true;
-        if (d.payload?.combobulate?.[MIRROR_MARKER]) return true;
+        if (isMirrorMarker(d.payload?.combobulate) || isMirrorMarker(d.payload?.combobulator)) return true;
       }
     }
     return false;

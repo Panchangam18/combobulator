@@ -1,11 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { PATHS, isIgnoredCwd } from '../config.js';
+import { PATHS, isIgnoredCwd, isMirrorMarker } from '../config.js';
 import { info, warn } from '../log.js';
 import { registerCodexWorkspaceRoot } from '../codex-registry.js';
 import { upsertCodexThread } from '../codex-thread-db.js';
 
-// Walk every combobulate-mirrored rollout file and ensure it's wired up to
+// Walk every Combobulator-mirrored rollout file and ensure it's wired up to
 // Codex Desktop's UI: a row in state_5.sqlite's `threads` table (so the chat
 // shows in the per-cwd sidebar) AND the cwd in the JSON workspace-roots list
 // (belt-and-suspenders for fresh installs). Idempotent.
@@ -38,7 +38,7 @@ export async function fixCodexProjects() {
         sessionId: meta.sessionId,
         rolloutPath: f,
         cwd: meta.cwd,
-        title: meta.title || 'Synced from combobulate',
+        title: meta.title || 'Synced from combobulator',
         firstUserMessage: meta.firstUserMessage || '',
         createdAtMs: meta.createdAtMs || stat.birthtimeMs || stat.mtimeMs,
         updatedAtMs: stat.mtimeMs,
@@ -47,7 +47,7 @@ export async function fixCodexProjects() {
     }
   }
 
-  info(`scanned ${rollouts.length} rollout file(s); ${mirrorCount} are combobulate mirrors.`);
+  info(`scanned ${rollouts.length} rollout file(s); ${mirrorCount} are combobulator mirrors.`);
   info(`upserted ${threadsUpserted} thread row(s) into Codex Desktop's DB.`);
 
   // Register each cwd as a Codex Desktop workspace root via `codex app <path>`.
@@ -104,7 +104,7 @@ function peek(filePath) {
       let d;
       try { d = JSON.parse(line); } catch { continue; }
       // Legacy top-level marker (pre-v0.2 rollouts)
-      if (d.__combobulate_mirror__) {
+      if (isMirrorMarker(d)) {
         isMirror = true;
         if (d.title) title = d.title;
         if (d.firstUserMessage) firstUserMessage = d.firstUserMessage;
@@ -115,9 +115,10 @@ function peek(filePath) {
         if (d.payload?.cwd) cwd = d.payload.cwd;
         if (d.payload?.id) sessionId = d.payload.id;
         if (d.payload?.timestamp) createdAtMs = Date.parse(d.payload.timestamp);
-        // New marker location: nested under session_meta.payload.combobulate
-        const c = d.payload?.combobulate;
-        if (c?.__combobulate_mirror__) {
+        // Markers are nested in the current combobulator metadata object;
+        // retain the legacy location for pre-rename rollout files.
+        const c = d.payload?.combobulator || d.payload?.combobulate;
+        if (isMirrorMarker(c)) {
           isMirror = true;
           if (c.title && !title) title = c.title;
           if (c.firstUserMessage && !firstUserMessage) firstUserMessage = c.firstUserMessage;
@@ -131,7 +132,7 @@ function peek(filePath) {
       const extracted = extractFirstUserLine(flattenedText);
       if (extracted) {
         if (!firstUserMessage) firstUserMessage = extracted.slice(0, 2000);
-        if (!title || title === 'Synced from combobulate') title = extracted.split('\n')[0].slice(0, 200);
+        if (!title || title === 'Synced from combobulator') title = extracted.split('\n')[0].slice(0, 200);
       }
     }
     return { isMirror, cwd, sessionId, title, firstUserMessage, createdAtMs };
@@ -141,7 +142,7 @@ function peek(filePath) {
 }
 
 // The flattened transcript looks like:
-//   [Synced from claude via combobulate]
+//   [Synced from claude via combobulator]
 //   ... header ...
 //   ---
 //   **User:** <first message body — may span multiple lines until the next \n\n>

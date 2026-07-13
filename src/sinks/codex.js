@@ -57,8 +57,8 @@ export function writeCodexMirror(session, { existingSessionId, existingFilePath 
   // under one task_started, Codex's UI renders the second+ user messages as
   // "steered conversation" — it thinks they're mid-turn redirects, not new turns.
   //
-  // The loop-prevention marker hides inside session_meta.payload.combobulate so
-  // Codex's parser doesn't reject the rollout (originator='combobulate' makes it
+  // The loop-prevention marker hides inside session_meta.payload.combobulator so
+  // Codex's parser doesn't reject the rollout (originator='combobulator' makes it
   // flip source to 'unknown').
   const lines = [];
 
@@ -77,7 +77,7 @@ export function writeCodexMirror(session, { existingSessionId, existingFilePath 
       originator: 'Codex CLI',
       cli_version: '0.1.0',
       model_provider: 'openai',
-      combobulate: {
+      combobulator: {
         [MIRROR_MARKER]: true,
         mirrorOf: `${session.source}/${session.sessionId}`,
         mirroredAt: tsIso,
@@ -564,7 +564,7 @@ function firstUserSnippet(session) {
 
 function renderTranscript(session) {
   const header =
-    `[Synced from ${session.source}${session.threadName ? `: ${session.threadName}` : ''} via combobulate]\n` +
+    `[Synced from ${session.source}${session.threadName ? `: ${session.threadName}` : ''} via combobulator]\n` +
     `Source session: ${session.sessionId}\n` +
     (session.cwd ? `Source cwd: ${session.cwd}\n` : '') +
     `Synced: ${new Date().toISOString()}\n\n` +
