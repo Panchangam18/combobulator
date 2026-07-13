@@ -27,6 +27,16 @@ fs.utimesSync(codexFile, new Date(), new Date()); // ensure mtime > epoch
 
 // Import daemon's helpers and run one tick manually (without the setInterval loop).
 const daemonMod = await import('./src/daemon.js');
+let watchEvent;
+const eventSeen = new Promise((resolve) => { watchEvent = resolve; });
+const watcher = daemonMod.watchSessionStorage(watchEvent);
+fs.appendFileSync(codexFile, '\n');
+await Promise.race([
+  eventSeen,
+  new Promise((_, reject) => setTimeout(() => reject(new Error('filesystem watcher did not fire')), 2000)),
+]);
+watcher.close();
+console.log('✓ filesystem event triggers a debounced sync notification');
 // runDaemon spawns an infinite interval — we don't want that here. Instead we
 // import the internal scanClaude/scanCodex via a direct sync invocation.
 const syncMod = await import('./src/commands/sync.js');

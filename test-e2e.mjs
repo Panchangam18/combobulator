@@ -9,6 +9,7 @@ import path from 'node:path';
 import os from 'node:os';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'combobulator-e2e-'));
 console.log(`test root: ${ROOT}`);
@@ -92,7 +93,7 @@ console.log('✓ codex session_index entry written');
 // (Importing state.js gives us the dedup primitives.)
 const { fingerprintMessages, getMirror, setMirror, loadState, saveState } = await import('./src/state.js');
 const fp1 = fingerprintMessages(codexSession.messages);
-setMirror('codex/' + codexId, { sourceFingerprint: fp1, targets: { claude: claudeResult }, lastSyncedAt: Date.now() });
+setMirror('codex/' + codexId, { sourceFingerprint: fp1, sourcePath: codexFile, targets: { claude: claudeResult }, lastSyncedAt: Date.now() });
 saveState();
 const stored = getMirror('codex/' + codexId);
 assert.equal(stored.sourceFingerprint, fp1);
@@ -102,6 +103,45 @@ console.log('✓ state persistence works');
 const fp2 = fingerprintMessages([...codexSession.messages, { role: 'user', text: 'and ship it', ts: Date.now() }]);
 assert.notEqual(fp1, fp2);
 console.log('✓ fingerprint detects new messages');
+
+// --- Continue a Codex-origin mirror in Claude. Test the real incremental shape:
+// Claude writes the user prompt first, then appends the assistant response. ---
+const claudeContinuationUser = {
+  parentUuid: null,
+  isSidechain: false,
+  type: 'user',
+  message: { role: 'user', content: [{ type: 'text', text: 'also add keyboard shortcuts' }] },
+  uuid: crypto.randomUUID(),
+  timestamp: new Date().toISOString(),
+  cwd: fakeCwd,
+  sessionId: claudeResult.sessionId,
+};
+fs.appendFileSync(claudeResult.filePath, `${JSON.stringify(claudeContinuationUser)}\n`);
+const { tick } = await import('./src/daemon.js');
+await tick();
+let codexAfterClaude = await readCodexSession(codexFile);
+assert.equal(codexAfterClaude.messages.at(-1).text, 'also add keyboard shortcuts');
+assert.equal(codexAfterClaude.messages.at(-1).role, 'user');
+
+const claudeContinuationAssistant = {
+  parentUuid: claudeContinuationUser.uuid,
+  isSidechain: false,
+  type: 'assistant',
+  message: {
+    role: 'assistant',
+    content: [{ type: 'text', text: 'Added command and control keyboard shortcuts.' }],
+  },
+  uuid: crypto.randomUUID(),
+  timestamp: new Date().toISOString(),
+  sessionId: claudeResult.sessionId,
+};
+fs.appendFileSync(claudeResult.filePath, `${JSON.stringify(claudeContinuationAssistant)}\n`);
+await tick();
+codexAfterClaude = await readCodexSession(codexFile);
+assert.equal(codexAfterClaude.messages.at(-1).text, 'Added command and control keyboard shortcuts.');
+assert.equal(codexAfterClaude.messages.at(-1).role, 'assistant');
+assert.equal(codexAfterClaude.isMirror, false, 'write-back must preserve the original Codex session');
+console.log('✓ Claude continuation writes back incrementally to the original Codex session');
 
 // --- Now build a synthetic Claude session and verify the reverse direction ---
 const claudeCwd = '/Users/madhavan/another-project';
@@ -125,7 +165,29 @@ const codexMirrorOfClaude = writeCodexMirror(claudeSession);
 assert.ok(fs.existsSync(codexMirrorOfClaude.filePath));
 const reread = await readCodexSession(codexMirrorOfClaude.filePath);
 assert.equal(reread.isMirror, true, 'codex mirror of claude must be flagged as mirror');
+assert.equal(reread.mirrorOf, `claude/${claudeId}`, 'reader should retain mirror lineage');
 console.log('✓ end-to-end: claude → codex mirror + loop prevention');
+
+// --- Continue the Claude-origin mirror in Codex and run one daemon tick. The
+// new Codex turn should be appended to the original Claude session. ---
+setMirror(`claude/${claudeId}`, {
+  sourceFingerprint: fingerprintMessages(claudeSession.messages),
+  sourcePath: claudeFile,
+  targets: { codex: codexMirrorOfClaude },
+  lastSyncedAt: Date.now(),
+});
+const continuationTs = new Date().toISOString();
+fs.appendFileSync(codexMirrorOfClaude.filePath, [
+  { timestamp: continuationTs, type: 'event_msg', payload: { type: 'user_message', message: 'now make that fix permanent', images: [] } },
+  { timestamp: continuationTs, type: 'event_msg', payload: { type: 'agent_message', message: 'Added a regression test so it stays fixed.' } },
+].map((line) => JSON.stringify(line)).join('\n') + '\n');
+await tick();
+const claudeAfterCodex = await readClaudeSession(claudeFile);
+assert.equal(claudeAfterCodex.messages.length, 4, 'Codex continuation should be written to original Claude chat');
+assert.equal(claudeAfterCodex.messages[2].text, 'now make that fix permanent');
+assert.equal(claudeAfterCodex.messages[3].text, 'Added a regression test so it stays fixed.');
+assert.equal(claudeAfterCodex.isMirror, false, 'write-back must not turn the original into a mirror');
+console.log('✓ Codex continuation writes back to the original Claude session');
 
 // --- Finally: listClaudeSessions should find the mirror file (mirrors are still session files) ---
 const listed = listClaudeSessions();
@@ -165,6 +227,32 @@ assert.equal(idxLinesAfter, idxLinesBefore, 'codex session_index.jsonl must NOT 
 const rewritten = await readClaudeSession(claudeResult.filePath);
 assert.equal(rewritten.isMirror, true, 'rewritten mirror still detected as mirror');
 console.log('✓ update-in-place: same file path, mtime bumped, history/index NOT re-appended');
+
+// --- Cleanup --all removes only Combobulator-authored chats and their DB rows. ---
+fs.mkdirSync(PATHS.codexDir, { recursive: true });
+const dbPath = path.join(PATHS.codexDir, 'state_5.sqlite');
+const db = new DatabaseSync(dbPath);
+db.exec('CREATE TABLE threads (id TEXT PRIMARY KEY, source TEXT, rollout_path TEXT, archived INTEGER DEFAULT 0)');
+db.prepare('INSERT INTO threads (id, source, rollout_path, archived) VALUES (?, ?, ?, 0)')
+  .run(codexResult.sessionId, 'cli', codexResult.filePath);
+db.prepare('INSERT INTO threads (id, source, rollout_path, archived) VALUES (?, ?, ?, 0)')
+  .run(codexId, 'vscode', codexFile);
+db.close();
+
+const { cleanup } = await import('./src/commands/cleanup.js');
+await cleanup({ all: true, dryRun: true });
+assert.ok(fs.existsSync(codexResult.filePath), 'dry-run must preserve mirror files');
+await cleanup({ all: true });
+assert.ok(!fs.existsSync(codexResult.filePath), 'cleanup should delete Codex mirror');
+assert.ok(!fs.existsSync(claudeResult.filePath), 'cleanup should delete Claude mirror');
+assert.ok(fs.existsSync(codexFile), 'cleanup must preserve original Codex chat');
+assert.ok(fs.existsSync(claudeFile), 'cleanup must preserve original Claude chat');
+const verifyDb = new DatabaseSync(dbPath);
+assert.equal(verifyDb.prepare('SELECT count(*) AS n FROM threads WHERE id = ?').get(codexResult.sessionId).n, 0);
+assert.equal(verifyDb.prepare('SELECT count(*) AS n FROM threads WHERE id = ?').get(codexId).n, 1);
+verifyDb.close();
+assert.deepEqual(loadState().mirrors, {}, 'cleanup should clear mirror tracking');
+console.log('✓ discombobulate --all removes mirrors and preserves original chats');
 
 console.log('\nAll e2e checks passed.');
 console.log(`Test artifacts preserved at: ${ROOT}`);

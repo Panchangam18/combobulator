@@ -27,16 +27,17 @@ COMMANDS
                     Register every cwd from existing mirrors in Codex Desktop's
                     workspace list. Called automatically by install; rerun if
                     Codex stopped surfacing a synced project.
-  cleanup [--dry-run]
+  discombobulate [--dry-run] [--all]
                     Remove broken Codex thread rows we created (source='unknown'
                     or orphaned). Safe — won't touch your real threads or
                     rollout files.
+                    --all removes every mirrored chat and tracking record.
   doctor            Diagnose the setup: daemon, paths, state, recent errors.
                     Run this first when sync isn't working.
   help              Show this message.
 
 How it works
-  Daemon polls each tool's session storage every 1.5s. New chats get mirrored
+  Daemon uses macOS filesystem events to detect session changes. New chats get mirrored
   to the other tools' native formats: per-turn replay with proper task_started
   / agent_message / tool calls, real timestamps, and a [Source] tag prepended
   to the title. Mirrored files are tagged so we never replay our own writes.
@@ -70,7 +71,7 @@ export async function main(argv) {
     case 'daemon':     return runDaemon();
     case 'status':     return status();
     case 'fix-codex-projects': return fixCodexProjects();
-    case 'cleanup': return cleanup({ dryRun: !!args['dry-run'] });
+    case 'discombobulate': return cleanup({ dryRun: !!args['dry-run'], all: !!args.all });
     case 'doctor': return doctor();
     case 'sync':
       return sync({

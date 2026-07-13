@@ -37,6 +37,7 @@ export async function readCodexSession(filePath) {
   let createdAt = null;
   let updatedAt = null;
   let isMirror = false;
+  let mirrorOf = null;
   let threadName = null;
 
   for await (const line of rl) {
@@ -45,7 +46,11 @@ export async function readCodexSession(filePath) {
     try { d = JSON.parse(line); } catch { continue; }
 
     // Old top-level marker (legacy rollout format) — still detect for cleanup
-    if (isMirrorMarker(d)) { isMirror = true; continue; }
+    if (isMirrorMarker(d)) {
+      isMirror = true;
+      mirrorOf = d.mirrorOf || null;
+      continue;
+    }
 
     if (d.timestamp) {
       const t = Date.parse(d.timestamp);
@@ -60,7 +65,11 @@ export async function readCodexSession(filePath) {
       if (d.payload?.cwd) cwd = d.payload.cwd;
       // Detect new and legacy marker locations.
       if (d.payload?.originator === 'combobulate') isMirror = true;
-      if (isMirrorMarker(d.payload?.combobulate) || isMirrorMarker(d.payload?.combobulator)) isMirror = true;
+      const marker = d.payload?.combobulator || d.payload?.combobulate;
+      if (isMirrorMarker(marker)) {
+        isMirror = true;
+        mirrorOf = marker.mirrorOf || null;
+      }
     } else if (d.type === 'event_msg') {
       const p = d.payload;
       if (p?.type === 'user_message' && typeof p.message === 'string') {
@@ -88,6 +97,7 @@ export async function readCodexSession(filePath) {
     updatedAt: updatedAt ?? Date.now(),
     messages: filtered,
     isMirror,
+    mirrorOf,
     sourcePath: filePath,
   };
 }

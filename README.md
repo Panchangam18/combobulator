@@ -1,185 +1,125 @@
 # combobulator
 
-Unify local chat memory across **Claude Code**, **Codex**, and **Cursor**.
+Keep local coding chats in sync across Claude Code, Codex, and Cursor.
 
-Each desktop AI coding tool keeps its chat history in its own format on your disk.
-If you ask Codex a question and want to pick the conversation up in Claude Code,
-there's normally no way to do it — no shared history.
+Combobulator runs as a small macOS background service. It watches each tool's
+local session storage and writes new chats into the native history format used
+by the other tools.
 
-`combobulator` is a small macOS daemon that watches each tool's session storage
-and mirrors new chats across the others. Open the same project in any of the
-three tools and you'll see the chats you started elsewhere, with proper titles,
-timestamps, and tool-call rendering native to that tool.
+Start a chat in Codex, continue it in Claude Code, then reopen the original
+Codex chat and see the continuation there too. The same flow works in the other
+direction. Mirrored chats keep their project, title, messages, and timestamps.
+
+## Requirements
+
+- macOS
+- Node.js 22 or newer
 
 ## Install
-
-Requires **Node.js ≥ 22** (uses the built-in `node:sqlite` module) and **macOS**
-(the daemon runs under launchd; Linux is a future port).
-
-```bash
-# from a clone
-git clone https://github.com/Panchangam18/combobulator ~/combobulator
-cd ~/combobulator
-npm install -g .
-combobulator install
-```
-
-Or, once published:
 
 ```bash
 npm install -g combobulator
 combobulator install
 ```
 
-`combobulator install` writes a launchd plist at
-`~/Library/LaunchAgents/com.combobulator.daemon.plist` and loads it. From now on,
-every new chat in any of the three tools mirrors to the others within ~1.5s, and
-the daemon restarts automatically on every login.
+`combobulator install` starts the launchd agent and configures it to run after
+login. Only chats created or updated after installation are synced by default.
 
-## What works
+To install from a local clone instead:
 
-| Surface | Sync direction | How |
-|---|---|---|
-| Claude Code CLI (`claude /resume`) | read + write | direct file mirror under `~/.claude/projects/` |
-| Claude Code VS Code extension | read + write | same files |
-| Claude Code Cursor extension | read + write | same files |
-| Codex CLI (`codex resume`) | read + write | direct rollout mirror under `~/.codex/sessions/` |
-| Codex Desktop project sidebar | read + write | rollout + `codex app` IPC + `state_5.sqlite` row |
-| Cursor | **read-only** | `state.vscdb` sqlite read |
-| Claude Desktop "Claude Code" tab | not supported | cloud-backed, see Limitations |
-
-## How it works
-
-```
-                   ┌──────────────┐
-   Claude Code ──► │              │ ──► Claude Code
-                   │  combobulator │
-   Codex ────────► │   daemon     │ ──► Codex
-                   │              │
-   Cursor ───────► │  (poll @1.5s)│     Cursor (write deferred)
-                   └──────────────┘
+```bash
+npm install -g .
+combobulator install
 ```
 
-Every 1.5s the daemon scans:
-- `~/.claude/projects/<encoded-cwd>/*.jsonl` — Claude Code sessions
-- `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` — Codex rollouts
-- `~/Library/Application Support/Cursor/.../state.vscdb` — Cursor's chat DB
-  (opened read-only with `mode=ro&immutable=1` so we never contend with the
-  running Cursor process)
+## Supported tools
 
-For each session newer than the install epoch the daemon:
+| Tool | Support |
+|---|---|
+| Claude Code CLI and editor extensions | Read and write |
+| Codex CLI and Codex Desktop | Read and write |
+| Cursor chat | Read only |
 
-1. **Normalizes** it into a tool-agnostic typed event stream: real user prompts,
-   assistant text responses, tool calls (with input/output), tool results.
-2. **Detects mirrors** via a `__combobulator_mirror__` marker baked into every file
-   we write, so we never re-mirror our own writes.
-3. **Fingerprints** the message stream — skips if nothing has changed since the
-   last sync. Same source updating? Overwrite the same mirror file in place.
-4. **Emits** to each target tool's native format, including:
-   - Per-turn `task_started` / `turn_context` / `user_message` / `reasoning` /
-     `agent_message` / `task_complete` for Codex (the format Codex Desktop's
-     renderer requires — wrong `phase` values or missing events make messages
-     invisible).
-   - Native `function_call` / `exec_command_end` / `function_call_output`
-     events for tool calls (Bash → `exec_command`, Edit/Write/MultiEdit →
-     `custom_tool_call name=apply_patch` with a unified diff).
-   - Real per-message timestamps so the chat sorts under the date the original
-     conversation happened.
-   - A `[Claude Code]` / `[Codex]` / `[Cursor]` tag prepended to every mirrored
-     thread title so you can see at a glance where a chat came from.
+Cursor chats can be mirrored into Claude Code and Codex. Combobulator does not
+write chats into Cursor's database because Cursor keeps it locked while running.
 
-For Codex Desktop specifically, the daemon also:
-- Calls `codex app <cwd>` so the project appears in Codex Desktop's sidebar.
-- Inserts a row into `state_5.sqlite`'s `threads` table with `source='cli'`,
-  non-zero `tokens_used`, and a non-empty `preview` — the threads with all three
-  of those missing get filtered out of Codex Desktop's chat list as "empty drafts".
+Claude Desktop's cloud-backed "Claude Code" tab is not supported. Synced chats
+are available through the Claude Code CLI and its VS Code or Cursor extensions.
 
 ## Commands
 
 ```bash
-combobulator install        # set up the launchd agent, start the daemon
-combobulator uninstall      # remove the launchd agent (state in ~/.combobulator is kept)
-combobulator daemon         # run the watcher in the foreground (used by launchd)
-combobulator status         # quick state summary
-combobulator doctor         # diagnose: daemon, paths, state, recent errors
-combobulator sync           # one-shot mirror pass (doesn't need the daemon)
-   --all                   # ignore the install epoch
-   --since-hours=N         # default 24
-   --limit=N               # max sessions per source, default 20
-   --dry-run               # log what would mirror, write nothing
-combobulator fix-codex-projects
-                           # re-register all mirror cwds with Codex Desktop
-combobulator cleanup        # remove broken Codex thread rows we created
-   --dry-run               # list what would be deleted
-combobulator help
-```
-
-**First-time troubleshooting**: run `combobulator doctor`. If it reports
-problems, the message tells you the exact recovery command.
-
-## Files Combobulator Touches
-
-| Location | What |
-|---|---|
-| `~/.combobulator/state.json` | mirror tracking (source fingerprint → target ids/paths) |
-| `~/.combobulator/daemon.log` | daemon log |
-| `~/.combobulator/synced/` | fallback cwd for sourceless sessions (Cursor) |
-| `~/Library/LaunchAgents/com.combobulator.daemon.plist` | launchd entry |
-| `~/.claude/projects/<cwd>/<uuid>.jsonl` | mirrored Claude sessions |
-| `~/.claude/history.jsonl` | up-arrow entries prefixed `[Codex]` / `[Cursor]` |
-| `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` | mirrored Codex rollouts |
-| `~/.codex/state_5.sqlite` `threads` table | row per mirror so Codex Desktop renders it |
-| `~/.codex/session_index.jsonl` | thread-index entry |
-| `~/.codex/history.jsonl` | up-arrow entries prefixed `[Claude Code]` / `[Cursor]` |
-| `~/.codex/.codex-global-state.json` | workspace-roots additions (one-time per cwd) |
-
-Every mirrored Claude session has a `__combobulator_mirror__` marker on line 1.
-Every mirrored Codex rollout has it nested at `session_meta.payload.combobulator`.
-That's our loop-prevention key. To wipe all mirrors:
-
-```bash
+combobulator install
 combobulator uninstall
-grep -rl __combobulator_mirror__ ~/.claude/projects ~/.codex/sessions | xargs rm
-combobulator cleanup    # remove dangling DB rows (still requires Node 22+)
-rm -rf ~/.combobulator
+combobulator status
+combobulator doctor
+combobulator sync
+combobulator discombobulate --all
 ```
 
-## Known limitations
+- `install` installs and starts the background service.
+- `uninstall` stops and removes the background service. Sync state is preserved.
+- `status` shows daemon, path, and recent sync information.
+- `doctor` checks the installation and reports repair commands.
+- `sync` runs a one-time sync without the daemon.
+- `discombobulate --all` removes every mirrored chat and tracking record while
+  preserving original Claude Code, Codex, and Cursor chats.
 
-- **macOS only.** Daemon runs under launchd; Linux/systemd is a small port.
-- **Cursor is read-only.** Cursor holds its 1.3GB `state.vscdb` open with a
-  write lock while the app is running — injecting writes risks corruption.
-  Cursor → others works fully; others → Cursor needs a Cursor extension that
-  runs in-process.
-- **Claude Desktop's "Claude Code" tab doesn't show synced chats.** That tab
-  is cloud-backed — it lists sessions registered in `bridge-state.json` between
-  a local CLI session and a claude.ai cloud session. Our mirrors are local-only
-  files, so they never get bridged. The Claude Code CLI, the VS Code extension,
-  and the Cursor extension all show synced chats correctly; only the
-  Claude Desktop in-app tab is affected.
-- **Codex Desktop's diff card** under an Edit/Write tool call shows
-  "initialize a git repo" if the cwd isn't a git repo, and otherwise shows
-  no diff if the file is already at the final state on disk. Codex's diff
-  renderer reads the live working tree via `git diff`, not the unified diff
-  embedded in the rollout — this is a Codex design choice.
-- **Tool fidelity isn't 100% across tools.** Claude's `Read`/`Glob`/`Grep`/etc.
-  are translated to Codex `exec_command` with a representative shell command;
-  the surface looks right but the tool semantics don't perfectly match. Edit
-  operations translate cleanly via `apply_patch`.
-
-## Hacking / testing
+Useful one-time sync options:
 
 ```bash
-npm test                       # runs test-e2e.mjs + test-daemon.mjs in a tmp HOME
-COMBOBULATOR_DEBUG=1 combobulator daemon
-tail -f ~/.combobulator/daemon.log
+combobulator sync --all --since-hours=24 --limit=20 --dry-run
 ```
 
-The architecture (sources, sinks, daemon orchestrator) is documented in code.
-The codex sink in particular has long comments capturing every format detail
-we reverse-engineered the hard way — keep them in sync if Codex's format
-shifts.
+Use `--all` to ignore the installation time, `--since-hours` to set the search
+window, `--limit` to cap sessions per source, and `--dry-run` to preview changes.
+
+Preview mirror removal before running it:
+
+```bash
+combobulator discombobulate --all --dry-run
+```
+
+## How syncing works
+
+The daemon uses filesystem events instead of continuously polling. A slow
+recovery scan catches dropped events or source directories created after the
+daemon starts.
+
+Combobulator marks every mirror it creates to prevent sync loops. When a mirror
+is continued in Claude Code or Codex, the new transcript tail is written back
+to the original chat only when the existing messages match exactly. Divergent
+histories are left untouched rather than merged automatically.
+
+Mirrored titles include `[Claude Code]`, `[Codex]`, or `[Cursor]` so their source
+is visible in resume lists.
+
+## Troubleshooting
+
+Start with:
+
+```bash
+combobulator doctor
+```
+
+For Codex Desktop project-list problems, run:
+
+```bash
+combobulator fix-codex-projects
+```
+
+Daemon logs are stored at `~/.combobulator/daemon.log`.
+
+## Development
+
+```bash
+npm test
+COMBOBULATOR_DEBUG=1 combobulator daemon
+```
+
+The tests use temporary home directories and do not modify your real chat
+history.
 
 ## License
 
-MIT.
+MIT

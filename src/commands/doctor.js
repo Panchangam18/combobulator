@@ -79,7 +79,7 @@ export async function doctor() {
       const db = new DatabaseSync(codexDb);
       const unknown = db.prepare(`SELECT COUNT(*) AS n FROM threads WHERE source='unknown' AND archived=0`).get();
       if (unknown.n > 0) {
-        add('WARN', 'codex threads', `${unknown.n} row(s) flagged 'unknown' — run: combobulator cleanup`);
+        add('WARN', 'codex threads', `${unknown.n} row(s) flagged 'unknown' — run: combobulator discombobulate`);
       } else {
         add('OK', 'codex threads', 'all rows look healthy');
       }

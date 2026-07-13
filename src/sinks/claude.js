@@ -123,6 +123,77 @@ export function writeClaudeMirror(session, { existingSessionId, existingFilePath
   return { sessionId, filePath };
 }
 
+// A user may resume a Claude-origin mirror in Codex. If Codex's transcript is
+// an exact extension of the original, append only the new turns to the native
+// Claude file so reopening the original Claude session includes that work.
+export async function appendClaudeContinuation(filePath, continuedSession) {
+  const { readClaudeSession } = await import('../sources/claude.js');
+  const original = await readClaudeSession(filePath);
+  const incoming = continuedSession.messages || [];
+  const prefix = original.messages || [];
+
+  if (incoming.length <= prefix.length || !isMessagePrefix(prefix, incoming)) {
+    return { appended: 0, session: original };
+  }
+
+  const rawLines = fs.readFileSync(filePath, 'utf8').split('\n').filter(Boolean);
+  let parentUuid = null;
+  for (const line of rawLines) {
+    try {
+      const record = JSON.parse(line);
+      if (record.uuid) parentUuid = record.uuid;
+    } catch {}
+  }
+
+  const additions = [];
+  for (const message of incoming.slice(prefix.length)) {
+    if (!message.text || !['user', 'assistant'].includes(message.role)) continue;
+    const uuid = crypto.randomUUID();
+    const timestamp = new Date(message.ts || Date.now()).toISOString();
+    if (message.role === 'user') {
+      additions.push(JSON.stringify({
+        parentUuid,
+        isSidechain: false,
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'text', text: message.text }] },
+        uuid,
+        timestamp,
+        userType: 'external',
+        entrypoint: 'combobulator-writeback',
+        cwd: original.cwd,
+        sessionId: original.sessionId,
+        version: '2.1.111',
+      }));
+    } else {
+      additions.push(JSON.stringify({
+        parentUuid,
+        isSidechain: false,
+        type: 'assistant',
+        message: {
+          model: 'codex-continuation',
+          id: `msg_${uuid.replace(/-/g, '').slice(0, 24)}`,
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'text', text: message.text }],
+        },
+        uuid,
+        timestamp,
+        sessionId: original.sessionId,
+      }));
+    }
+    parentUuid = uuid;
+  }
+
+  if (additions.length) fs.appendFileSync(filePath, additions.join('\n') + '\n');
+  return { appended: additions.length, session: await readClaudeSession(filePath) };
+}
+
+function isMessagePrefix(prefix, messages) {
+  return prefix.every((message, index) => (
+    message.role === messages[index]?.role && message.text === messages[index]?.text
+  ));
+}
+
 function appendClaudeHistory({ text, cwd, sourceLabel }) {
   fs.mkdirSync(path.dirname(PATHS.claudeHistory), { recursive: true });
   const entry = {
@@ -130,6 +201,7 @@ function appendClaudeHistory({ text, cwd, sourceLabel }) {
     pastedContents: {},
     timestamp: Date.now(),
     project: cwd,
+    combobulator: true,
   };
   fs.appendFileSync(PATHS.claudeHistory, JSON.stringify(entry) + '\n');
 }

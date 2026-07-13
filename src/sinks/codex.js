@@ -286,6 +286,123 @@ export function writeCodexMirror(session, { existingSessionId, existingFilePath 
   return { sessionId, filePath };
 }
 
+// Write only the new tail of a Claude continuation into its original Codex
+// rollout. User prompts and assistant responses may arrive in separate file
+// events, so a user-only tail deliberately leaves the Codex turn open.
+export async function appendCodexContinuation(filePath, continuedSession) {
+  const { readCodexSession } = await import('../sources/codex.js');
+  const original = await readCodexSession(filePath);
+  const incoming = continuedSession.messages || [];
+  const prefix = original.messages || [];
+
+  if (incoming.length <= prefix.length || !isMessagePrefix(prefix, incoming)) {
+    return { appended: 0, session: original };
+  }
+
+  const additions = incoming.slice(prefix.length)
+    .filter((message) => message.text && ['user', 'assistant'].includes(message.role));
+  if (!additions.length) return { appended: 0, session: original };
+
+  const rawLines = fs.readFileSync(filePath, 'utf8').split('\n').filter(Boolean);
+  let openTurnId = findOpenTurnId(rawLines);
+  let lastAgentMessage = '';
+  const lines = [];
+
+  const closeTurn = (timestamp) => {
+    if (!openTurnId) return;
+    lines.push(JSON.stringify({
+      timestamp,
+      type: 'event_msg',
+      payload: {
+        type: 'task_complete',
+        turn_id: openTurnId,
+        last_agent_message: lastAgentMessage.slice(0, 2000),
+        completed_at: Math.floor(Date.parse(timestamp) / 1000),
+        duration_ms: 0,
+      },
+    }));
+    openTurnId = null;
+  };
+
+  for (const message of additions) {
+    const timestamp = new Date(message.ts || Date.now()).toISOString();
+    if (message.role === 'user') {
+      closeTurn(timestamp);
+      openTurnId = uuidv7();
+      lines.push(JSON.stringify({
+        timestamp,
+        type: 'event_msg',
+        payload: { type: 'task_started', turn_id: openTurnId, model_context_window: 258400, collaboration_mode_kind: 'default' },
+      }));
+      lines.push(JSON.stringify({
+        timestamp,
+        type: 'turn_context',
+        payload: {
+          turn_id: openTurnId,
+          cwd: original.cwd,
+          approval_policy: 'never',
+          sandbox_policy: { type: 'danger-full-access' },
+          model: 'claude-continuation',
+          effort: 'medium',
+          summary: 'none',
+        },
+      }));
+      lines.push(JSON.stringify({
+        timestamp,
+        type: 'response_item',
+        payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: message.text }] },
+      }));
+      lines.push(JSON.stringify({
+        timestamp,
+        type: 'event_msg',
+        payload: { type: 'user_message', message: message.text, images: [] },
+      }));
+    } else {
+      if (!openTurnId) openTurnId = uuidv7();
+      lines.push(JSON.stringify({
+        timestamp,
+        type: 'response_item',
+        payload: { type: 'reasoning', summary: [], content: null, encrypted_content: '' },
+      }));
+      lines.push(JSON.stringify({
+        timestamp,
+        type: 'event_msg',
+        payload: { type: 'agent_message', message: message.text, phase: 'final_answer', memory_citation: null },
+      }));
+      lines.push(JSON.stringify({
+        timestamp,
+        type: 'response_item',
+        payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: message.text }], phase: 'final_answer' },
+      }));
+      lastAgentMessage = message.text;
+    }
+  }
+
+  if (additions.at(-1)?.role === 'assistant') {
+    closeTurn(new Date(additions.at(-1).ts || Date.now()).toISOString());
+  }
+  fs.appendFileSync(filePath, lines.join('\n') + '\n');
+  return { appended: additions.length, session: await readCodexSession(filePath) };
+}
+
+function findOpenTurnId(lines) {
+  let openTurnId = null;
+  for (const line of lines) {
+    let record;
+    try { record = JSON.parse(line); } catch { continue; }
+    if (record.type !== 'event_msg') continue;
+    if (record.payload?.type === 'task_started') openTurnId = record.payload.turn_id;
+    if (record.payload?.type === 'task_complete' && record.payload.turn_id === openTurnId) openTurnId = null;
+  }
+  return openTurnId;
+}
+
+function isMessagePrefix(prefix, messages) {
+  return prefix.every((message, index) => (
+    message.role === messages[index]?.role && message.text === messages[index]?.text
+  ));
+}
+
 // Human-readable label for the tool the mirror came from. Prepended to every
 // title so Codex's chat list makes it obvious which tool originated the chat.
 function sourceTag(source) {

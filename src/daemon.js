@@ -1,12 +1,13 @@
 import fs from 'node:fs';
-import { PATHS, POLL_INTERVAL_MS, isIgnoredCwd } from './config.js';
+import path from 'node:path';
+import { PATHS, WATCH_DEBOUNCE_MS, RECOVERY_SCAN_INTERVAL_MS, isIgnoredCwd } from './config.js';
 import { info, warn, error, debug } from './log.js';
 import { loadState, saveState, getMirror, setMirror, fingerprintMessages } from './state.js';
 import { listClaudeSessions, readClaudeSession } from './sources/claude.js';
 import { listCodexSessions, readCodexSession } from './sources/codex.js';
 import { listCursorComposers, readCursorComposer } from './sources/cursor.js';
-import { writeClaudeMirror } from './sinks/claude.js';
-import { writeCodexMirror } from './sinks/codex.js';
+import { writeClaudeMirror, appendClaudeContinuation } from './sinks/claude.js';
+import { writeCodexMirror, appendCodexContinuation } from './sinks/codex.js';
 
 function fileAlreadyScanned(state, meta) {
   const prev = state.scannedFiles?.[meta.path];
@@ -45,7 +46,7 @@ function markCursorScanned(state, composer, session) {
 // Mirror a single normalized session to every other tool. Skip self and skip mirrors.
 async function mirrorSession(session) {
   if (isIgnoredCwd(session.cwd)) return;
-  if (session.isMirror) return;
+  if (session.isMirror) return writeBackMirrorContinuation(session);
   if (!session.messages.length) return;
 
   const sourceKey = `${session.source}/${session.sessionId}`;
@@ -81,7 +82,45 @@ async function mirrorSession(session) {
     }
   }
 
-  setMirror(sourceKey, { sourceFingerprint: fp, targets, lastSyncedAt: Date.now() });
+  setMirror(sourceKey, { sourceFingerprint: fp, sourcePath: session.sourcePath, targets, lastSyncedAt: Date.now() });
+}
+
+async function writeBackMirrorContinuation(session) {
+  const claudeOriginInCodex = session.source === 'codex' && session.mirrorOf?.startsWith('claude/');
+  const codexOriginInClaude = session.source === 'claude' && session.mirrorOf?.startsWith('codex/');
+  if (!claudeOriginInCodex && !codexOriginInClaude) return;
+
+  const state = loadState();
+  const origin = getMirror(session.mirrorOf);
+  const originPath = origin?.sourcePath || findSourcePath(state, session.mirrorOf);
+  if (!originPath || !fs.existsSync(originPath)) return;
+
+  try {
+    const result = claudeOriginInCodex
+      ? await appendClaudeContinuation(originPath, session)
+      : await appendCodexContinuation(originPath, session);
+    if (!result.appended) return;
+
+    setMirror(session.mirrorOf, {
+      ...(origin || {}),
+      sourceFingerprint: fingerprintMessages(result.session.messages),
+      sourcePath: originPath,
+      lastSyncedAt: Date.now(),
+    });
+    info(`wrote ${result.appended} continuation message(s) back to ${session.mirrorOf}`);
+  } catch (e) {
+    error(`write-back failed for ${session.source}/${session.sessionId}: ${e.message}`);
+  }
+}
+
+function findSourcePath(state, sourceKey) {
+  const slash = sourceKey.indexOf('/');
+  const source = sourceKey.slice(0, slash);
+  const sessionId = sourceKey.slice(slash + 1);
+  for (const [filePath, record] of Object.entries(state.scannedFiles || {})) {
+    if (record.source === source && record.sessionId === sessionId && !record.isMirror) return filePath;
+  }
+  return null;
 }
 
 async function scanClaude(state) {
@@ -143,8 +182,12 @@ async function scanCursor(state) {
 }
 
 let running = false;
-async function tick() {
-  if (running) return;
+let rerunRequested = false;
+export async function tick() {
+  if (running) {
+    rerunRequested = true;
+    return;
+  }
   running = true;
   try {
     const state = loadState();
@@ -157,6 +200,10 @@ async function tick() {
     error(`tick failed: ${e.message}`);
   } finally {
     running = false;
+    if (rerunRequested) {
+      rerunRequested = false;
+      queueMicrotask(tick);
+    }
   }
 }
 
@@ -168,7 +215,48 @@ export async function runDaemon() {
   process.on('SIGTERM', () => { info('SIGTERM, exiting'); process.exit(0); });
   process.on('SIGINT', () => { info('SIGINT, exiting'); process.exit(0); });
 
-  info(`daemon started pid=${process.pid} interval=${POLL_INTERVAL_MS}ms`);
+  info(`daemon started pid=${process.pid} using filesystem events`);
   await tick();
-  setInterval(tick, POLL_INTERVAL_MS);
+  const watcher = watchSessionStorage(tick);
+  setInterval(() => {
+    watcher.refresh();
+    tick();
+  }, RECOVERY_SCAN_INTERVAL_MS);
+}
+
+export function watchSessionStorage(onChange) {
+  const watchers = new Map();
+  let debounce = null;
+  const schedule = () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(onChange, WATCH_DEBOUNCE_MS);
+  };
+
+  const roots = [PATHS.claudeDir, PATHS.codexDir, path.dirname(PATHS.cursorDb)];
+  const refresh = () => {
+    for (const root of roots) {
+      if (watchers.has(root) || !fs.existsSync(root)) continue;
+      try {
+        const watcher = fs.watch(root, { recursive: root !== path.dirname(PATHS.cursorDb) }, schedule);
+        watcher.on('error', (e) => {
+          debug(`watcher failed for ${root}: ${e.message}`);
+          watcher.close();
+          watchers.delete(root);
+        });
+        watchers.set(root, watcher);
+      } catch (e) {
+        debug(`cannot watch ${root}: ${e.message}`);
+      }
+    }
+  };
+
+  refresh();
+  return {
+    refresh,
+    close() {
+      clearTimeout(debounce);
+      for (const watcher of watchers.values()) watcher.close();
+      watchers.clear();
+    },
+  };
 }

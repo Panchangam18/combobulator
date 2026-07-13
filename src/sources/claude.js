@@ -45,6 +45,7 @@ export async function readClaudeSession(filePath) {
   let createdAt = null;
   let updatedAt = null;
   let isMirror = false;
+  let mirrorOf = null;
   let threadName = null;
 
   for await (const line of rl) {
@@ -52,7 +53,11 @@ export async function readClaudeSession(filePath) {
     let d;
     try { d = JSON.parse(line); } catch { continue; }
 
-    if (isMirrorMarker(d)) { isMirror = true; continue; }
+    if (isMirrorMarker(d)) {
+      isMirror = true;
+      mirrorOf = d.mirrorOf || null;
+      continue;
+    }
 
     if (d.sessionId && !sessionId) sessionId = d.sessionId;
     if (d.cwd && !cwd) cwd = d.cwd;
@@ -139,6 +144,7 @@ export async function readClaudeSession(filePath) {
     events,
     messages,
     isMirror,
+    mirrorOf,
     sourcePath: filePath,
   };
 }

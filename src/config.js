@@ -28,7 +28,10 @@ export const PATHS = {
 export const LAUNCHD_LABEL = 'com.combobulator.daemon';
 export const LEGACY_LAUNCHD_LABEL = 'com.combobulate.daemon';
 
-export const POLL_INTERVAL_MS = 1500;
+// File events drive normal syncing. The slow scan recovers from dropped events,
+// watcher restarts, and source directories that appear after daemon startup.
+export const WATCH_DEBOUNCE_MS = 250;
+export const RECOVERY_SCAN_INTERVAL_MS = 60_000;
 
 // Mirror marker — embedded in every synced session so we don't mirror our own writes.
 export const MIRROR_MARKER = '__combobulator_mirror__';
