@@ -49,6 +49,7 @@ export async function doctor() {
   add(fs.existsSync(PATHS.claudeProjects) ? 'OK' : 'WARN', 'claude path', PATHS.claudeProjects);
   add(fs.existsSync(PATHS.codexSessions)  ? 'OK' : 'WARN', 'codex path',  PATHS.codexSessions);
   add(fs.existsSync(PATHS.cursorDb)       ? 'OK' : 'WARN', 'cursor path', PATHS.cursorDb);
+  add(fs.existsSync(PATHS.t3Db)           ? 'OK' : 'WARN', 't3 path', PATHS.t3Db);
 
   // 3. state file
   let state;

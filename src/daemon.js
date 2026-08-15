@@ -6,8 +6,10 @@ import { loadState, saveState, getMirror, setMirror, fingerprintMessages } from 
 import { listClaudeSessions, readClaudeSession } from './sources/claude.js';
 import { listCodexSessions, readCodexSession } from './sources/codex.js';
 import { listCursorComposers, readCursorComposer } from './sources/cursor.js';
+import { listT3Threads, readT3Thread } from './sources/t3.js';
 import { writeClaudeMirror, appendClaudeContinuation } from './sinks/claude.js';
 import { writeCodexMirror, appendCodexContinuation } from './sinks/codex.js';
+import { writeT3Mirror } from './sinks/t3.js';
 
 function fileAlreadyScanned(state, meta) {
   const prev = state.scannedFiles?.[meta.path];
@@ -32,11 +34,11 @@ function cursorAlreadyScanned(state, composer) {
   return prev && prev.updatedAt === composer.updatedAt;
 }
 
-function markCursorScanned(state, composer, session) {
+function markCursorScanned(state, composer, session, source = 'cursor') {
   state.scannedCursorComposers ||= {};
   state.scannedCursorComposers[composer.id] = {
     updatedAt: composer.updatedAt,
-    source: 'cursor',
+    source,
     sessionId: session?.sessionId || composer.id,
     scannedAt: Date.now(),
   };
@@ -79,6 +81,16 @@ async function mirrorSession(session) {
       info(`mirrored ${sourceKey} -> codex:${result.sessionId}`);
     } catch (e) {
       error(`codex mirror failed for ${sourceKey}: ${e.message}`);
+    }
+  }
+
+  if (session.source !== 't3' && fs.existsSync(PATHS.t3Db)) {
+    try {
+      const result = writeT3Mirror(session, { existingSessionId: targets.t3?.sessionId });
+      targets.t3 = result;
+      info(`mirrored ${sourceKey} -> t3:${result.sessionId}`);
+    } catch (e) {
+      error(`t3 mirror failed for ${sourceKey}: ${e.message}`);
     }
   }
 
@@ -181,6 +193,18 @@ async function scanCursor(state) {
   return changed;
 }
 
+async function scanT3(state) {
+  if (!fs.existsSync(PATHS.t3Db)) return false;
+  let threads; try { threads = await listT3Threads(); } catch (e) { debug(`t3 list failed: ${e.message}`); return false; }
+  let changed = false;
+  for (const thread of threads) {
+    if (thread.updatedAt < state.epoch || cursorAlreadyScanned(state, thread)) continue;
+    try { const session = await readT3Thread(thread); changed = markCursorScanned(state, thread, session, 't3') || changed; if (session.messages.length) await mirrorSession(session); }
+    catch (e) { debug(`skip t3 ${thread.id}: ${e.message}`); }
+  }
+  return changed;
+}
+
 let running = false;
 let rerunRequested = false;
 export async function tick() {
@@ -194,7 +218,8 @@ export async function tick() {
     const claudeChanged = await scanClaude(state);
     const codexChanged = await scanCodex(state);
     const cursorChanged = await scanCursor(state);
-    const changed = claudeChanged || codexChanged || cursorChanged;
+    const t3Changed = await scanT3(state);
+    const changed = claudeChanged || codexChanged || cursorChanged || t3Changed;
     if (changed) saveState();
   } catch (e) {
     error(`tick failed: ${e.message}`);
@@ -232,7 +257,7 @@ export function watchSessionStorage(onChange) {
     debounce = setTimeout(onChange, WATCH_DEBOUNCE_MS);
   };
 
-  const roots = [PATHS.claudeDir, PATHS.codexDir, path.dirname(PATHS.cursorDb)];
+  const roots = [PATHS.claudeDir, PATHS.codexDir, path.dirname(PATHS.cursorDb), PATHS.t3Dir];
   const refresh = () => {
     for (const root of roots) {
       if (watchers.has(root) || !fs.existsSync(root)) continue;

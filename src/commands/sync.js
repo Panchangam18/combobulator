@@ -5,8 +5,10 @@ import { loadState, saveState, getMirror, setMirror, fingerprintMessages } from 
 import { listClaudeSessions, readClaudeSession } from '../sources/claude.js';
 import { listCodexSessions, readCodexSession } from '../sources/codex.js';
 import { listCursorComposers, readCursorComposer } from '../sources/cursor.js';
+import { listT3Threads, readT3Thread } from '../sources/t3.js';
 import { writeClaudeMirror } from '../sinks/claude.js';
 import { writeCodexMirror } from '../sinks/codex.js';
+import { writeT3Mirror } from '../sinks/t3.js';
 
 // One-shot sync. Doesn't require the daemon. Useful for testing or running on demand.
 // `--all` ignores the epoch and tries every session newer than --since (default: 24h).
@@ -46,6 +48,17 @@ export async function sync({ all = false, sinceHours = 24, limit = 20, dryRun = 
       }
     } catch (e) { info(`cursor scan failed: ${e.message}`); }
   }
+  if (fs.existsSync(PATHS.t3Db)) {
+    try {
+      const threads = await listT3Threads();
+      for (const thread of threads.slice(0, limit)) {
+        if (thread.updatedAt < cutoff) continue;
+        const s = await readT3Thread(thread);
+        if (isIgnoredCwd(s.cwd)) continue;
+        if (!s.isMirror && s.messages.length) sessions.push(s);
+      }
+    } catch (e) { info(`t3 scan failed: ${e.message}`); }
+  }
 
   info(`found ${sessions.length} candidate session(s) to mirror`);
 
@@ -75,6 +88,11 @@ export async function sync({ all = false, sinceHours = 24, limit = 20, dryRun = 
       });
       targets.codex = r;
       info(`  -> codex:${r.sessionId}`);
+    }
+    if (s.source !== 't3' && fs.existsSync(PATHS.t3Db)) {
+      const r = writeT3Mirror(s, { existingSessionId: targets.t3?.sessionId });
+      targets.t3 = r;
+      info(`  -> t3:${r.sessionId}`);
     }
     setMirror(key, { sourceFingerprint: fp, targets, lastSyncedAt: Date.now() });
   }

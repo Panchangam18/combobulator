@@ -14,6 +14,8 @@ export const PATHS = {
   codexHistory: path.join(HOME, '.codex', 'history.jsonl'),
 
   cursorDb: path.join(HOME, 'Library', 'Application Support', 'Cursor', 'User', 'globalStorage', 'state.vscdb'),
+  t3Dir: path.join(HOME, '.t3'),
+  t3Db: path.join(HOME, '.t3', 'userdata', 'state.sqlite'),
 
   combobulateDir: path.join(HOME, '.combobulator'),
   combobulateState: path.join(HOME, '.combobulator', 'state.json'),

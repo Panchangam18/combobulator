@@ -47,4 +47,5 @@ export async function status() {
   console.log(`  claude:  ${PATHS.claudeProjects} ${fs.existsSync(PATHS.claudeProjects) ? '✓' : '✗'}`);
   console.log(`  codex:   ${PATHS.codexSessions}  ${fs.existsSync(PATHS.codexSessions) ? '✓' : '✗'}`);
   console.log(`  cursor:  ${PATHS.cursorDb}  ${fs.existsSync(PATHS.cursorDb) ? '✓' : '✗ (cursor not installed)'}`);
+  console.log(`  t3:      ${PATHS.t3Db}  ${fs.existsSync(PATHS.t3Db) ? '✓' : '✗ (T3 Code not installed)'}`);
 }

@@ -1,6 +1,6 @@
 # combobulator
 
-Keep local coding chats in sync across Claude Code, Codex, and Cursor.
+Keep local coding chats in sync across Claude Code, Codex, Cursor, and T3 Code.
 
 Combobulator runs as a small macOS background service. It watches each tool's
 local session storage and writes new chats into the native history format used
@@ -39,8 +39,9 @@ combobulator combobulate
 | Claude Code CLI and editor extensions | Read and write |
 | Codex CLI and Codex Desktop | Read and write |
 | Cursor chat | Read only |
+| T3 Code | Read and write |
 
-Cursor chats can be mirrored into Claude Code and Codex. Combobulator does not
+Cursor chats can be mirrored into Claude Code, Codex, and T3 Code. Combobulator does not
 write chats into Cursor's database because Cursor keeps it locked while running.
 
 Claude Desktop's cloud-backed "Claude Code" tab is not supported. Synced chats
