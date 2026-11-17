@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { PATHS, isIgnoredCwd } from '../config.js';
+import { PATHS, isIgnoredCwd, resolveT3Db, resolveUserPath } from '../config.js';
 import { info } from '../log.js';
 import { loadState, saveState, getMirror, setMirror, fingerprintMessages } from '../state.js';
 import { listClaudeSessions, readClaudeSession } from '../sources/claude.js';
@@ -12,16 +12,29 @@ import { writeT3Mirror } from '../sinks/t3.js';
 
 // One-shot sync. Doesn't require the daemon. Useful for testing or running on demand.
 // `--all` ignores the epoch and tries every session newer than --since (default: 24h).
-export async function sync({ all = false, sinceHours = 24, limit = 20, dryRun = false } = {}) {
+export async function sync({
+  all = false,
+  sinceHours = 24,
+  limit = 20,
+  dryRun = false,
+  only = null,
+  t3Workspace = null,
+  cursorWorkspaces = [],
+  cursorWorkspacePrefixes = [],
+} = {}) {
   fs.mkdirSync(PATHS.combobulateDir, { recursive: true });
   fs.mkdirSync(PATHS.combobulateSynced, { recursive: true });
 
   const cutoff = all ? 0 : Date.now() - sinceHours * 3600 * 1000;
   const state = loadState();
+  const sinks = new Set(only?.length ? only : ['claude', 'codex', 't3']);
+  const t3Db = resolveT3Db();
+  const outputWorkspace = resolveUserPath(t3Workspace) || resolveUserPath(process.env.COMBOBULATOR_T3_WORKSPACE);
+  const cursorFiltered = cursorWorkspaces.length > 0 || cursorWorkspacePrefixes.length > 0;
 
   const sessions = [];
 
-  for (const meta of listClaudeSessions().slice(0, limit)) {
+  if (!cursorFiltered && sinks.has('claude')) for (const meta of listClaudeSessions().slice(0, limit)) {
     if (meta.mtime < cutoff) continue;
     try {
       const s = await readClaudeSession(meta.path);
@@ -29,7 +42,7 @@ export async function sync({ all = false, sinceHours = 24, limit = 20, dryRun = 
       if (!s.isMirror && s.messages.length) sessions.push(s);
     } catch (e) { /* ignore */ }
   }
-  for (const meta of listCodexSessions().slice(0, limit)) {
+  if (!cursorFiltered && sinks.has('codex')) for (const meta of listCodexSessions().slice(0, limit)) {
     if (meta.mtime < cutoff) continue;
     try {
       const s = await readCodexSession(meta.path);
@@ -39,8 +52,12 @@ export async function sync({ all = false, sinceHours = 24, limit = 20, dryRun = 
   }
   if (fs.existsSync(PATHS.cursorDb)) {
     try {
-      const composers = await listCursorComposers();
-      for (const c of composers.slice(0, limit)) {
+      const composers = await listCursorComposers({
+        workspaces: cursorWorkspaces,
+        prefixes: cursorWorkspacePrefixes,
+        limit,
+      });
+      for (const c of composers) {
         if (c.updatedAt < cutoff) continue;
         const s = await readCursorComposer(c.id);
         if (isIgnoredCwd(s?.cwd)) continue;
@@ -48,7 +65,7 @@ export async function sync({ all = false, sinceHours = 24, limit = 20, dryRun = 
       }
     } catch (e) { info(`cursor scan failed: ${e.message}`); }
   }
-  if (fs.existsSync(PATHS.t3Db)) {
+  if (!cursorFiltered && sinks.has('t3') && t3Db) {
     try {
       const threads = await listT3Threads();
       for (const thread of threads.slice(0, limit)) {
@@ -70,10 +87,10 @@ export async function sync({ all = false, sinceHours = 24, limit = 20, dryRun = 
       info(`skip ${key} (no changes)`);
       continue;
     }
-    info(`mirror ${key} (${s.messages.length} msgs)`);
+    info(`mirror ${key} (${s.messages.length} msgs)${s.cwd ? ` cwd=${s.cwd}` : ''}${outputWorkspace ? ` -> ${outputWorkspace}` : ''}`);
     if (dryRun) continue;
     const targets = prev?.targets || {};
-    if (s.source !== 'claude') {
+    if (sinks.has('claude') && s.source !== 'claude') {
       const r = writeClaudeMirror(s, {
         existingSessionId: targets.claude?.sessionId,
         existingFilePath: targets.claude?.filePath,
@@ -81,7 +98,7 @@ export async function sync({ all = false, sinceHours = 24, limit = 20, dryRun = 
       targets.claude = r;
       info(`  -> claude:${r.sessionId}`);
     }
-    if (s.source !== 'codex') {
+    if (sinks.has('codex') && s.source !== 'codex') {
       const r = writeCodexMirror(s, {
         existingSessionId: targets.codex?.sessionId,
         existingFilePath: targets.codex?.filePath,
@@ -89,8 +106,8 @@ export async function sync({ all = false, sinceHours = 24, limit = 20, dryRun = 
       targets.codex = r;
       info(`  -> codex:${r.sessionId}`);
     }
-    if (s.source !== 't3' && fs.existsSync(PATHS.t3Db)) {
-      const r = writeT3Mirror(s, { existingSessionId: targets.t3?.sessionId });
+    if (sinks.has('t3') && s.source !== 't3' && t3Db) {
+      const r = writeT3Mirror(s, { existingSessionId: targets.t3?.sessionId, workspace: outputWorkspace });
       targets.t3 = r;
       info(`  -> t3:${r.sessionId}`);
     }
