@@ -1,14 +1,15 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs';
-import { PATHS } from '../config.js';
+import { resolveT3Db, SQLITE_BIN } from '../config.js';
 
 const execFileP = promisify(execFile);
 async function sqlite(query) {
-  if (!fs.existsSync(PATHS.t3Db)) return [];
+  const dbPath = resolveT3Db();
+  if (!dbPath || !fs.existsSync(dbPath)) return [];
   // Do not use immutable=1: T3 runs in WAL mode and fresh events may live in
   // the WAL while the app is open.
-  const { stdout } = await execFileP('sqlite3', ['-json', `file:${PATHS.t3Db}?mode=ro`, query], { maxBuffer: 256 * 1024 * 1024 });
+  const { stdout } = await execFileP(SQLITE_BIN, ['-json', `file:${dbPath}?mode=ro`, query], { maxBuffer: 256 * 1024 * 1024 });
   return stdout.trim() ? JSON.parse(stdout) : [];
 }
 export async function listT3Threads() {

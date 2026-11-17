@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
-import { PATHS, HOME, LAUNCHD_LABEL } from '../config.js';
+import { PATHS, HOME, LAUNCHD_LABEL, resolveT3Db } from '../config.js';
 import { loadState } from '../state.js';
 
 // Diagnose the combobulate setup end-to-end. Walks every moving piece and
@@ -49,7 +49,8 @@ export async function doctor() {
   add(fs.existsSync(PATHS.claudeProjects) ? 'OK' : 'WARN', 'claude path', PATHS.claudeProjects);
   add(fs.existsSync(PATHS.codexSessions)  ? 'OK' : 'WARN', 'codex path',  PATHS.codexSessions);
   add(fs.existsSync(PATHS.cursorDb)       ? 'OK' : 'WARN', 'cursor path', PATHS.cursorDb);
-  add(fs.existsSync(PATHS.t3Db)           ? 'OK' : 'WARN', 't3 path', PATHS.t3Db);
+  const t3Db = resolveT3Db();
+  add(t3Db ? 'OK' : 'WARN', 't3 path', t3Db || `${PATHS.t3Db} (statev2.sqlite also missing)`);
 
   // 3. state file
   let state;

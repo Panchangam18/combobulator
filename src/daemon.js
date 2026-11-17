@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { PATHS, WATCH_DEBOUNCE_MS, RECOVERY_SCAN_INTERVAL_MS, isIgnoredCwd } from './config.js';
+import { PATHS, WATCH_DEBOUNCE_MS, RECOVERY_SCAN_INTERVAL_MS, isIgnoredCwd, resolveT3Db, splitList } from './config.js';
 import { info, warn, error, debug } from './log.js';
 import { loadState, saveState, getMirror, setMirror, fingerprintMessages } from './state.js';
 import { listClaudeSessions, readClaudeSession } from './sources/claude.js';
@@ -84,7 +84,7 @@ async function mirrorSession(session) {
     }
   }
 
-  if (session.source !== 't3' && fs.existsSync(PATHS.t3Db)) {
+  if (session.source !== 't3' && resolveT3Db()) {
     try {
       const result = writeT3Mirror(session, { existingSessionId: targets.t3?.sessionId });
       targets.t3 = result;
@@ -173,7 +173,13 @@ async function scanCursor(state) {
   if (!fs.existsSync(PATHS.cursorDb)) return;
   let composers;
   try {
-    composers = await listCursorComposers();
+    const workspaces = splitList(process.env.COMBOBULATOR_CURSOR_WORKSPACES);
+    const prefixes = splitList(process.env.COMBOBULATOR_CURSOR_WORKSPACE_PREFIXES);
+    composers = await listCursorComposers({
+      workspaces,
+      prefixes,
+      limit: workspaces.length || prefixes.length ? 10000 : 200,
+    });
   } catch (e) {
     debug(`cursor list failed: ${e.message}`);
     return;
@@ -194,7 +200,7 @@ async function scanCursor(state) {
 }
 
 async function scanT3(state) {
-  if (!fs.existsSync(PATHS.t3Db)) return false;
+  if (!resolveT3Db()) return false;
   let threads; try { threads = await listT3Threads(); } catch (e) { debug(`t3 list failed: ${e.message}`); return false; }
   let changed = false;
   for (const thread of threads) {

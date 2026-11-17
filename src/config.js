@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -26,6 +27,12 @@ export const PATHS = {
   legacyCombobulateState: path.join(HOME, '.combobulate', 'state.json'),
   legacyLaunchdPlist: path.join(HOME, 'Library', 'LaunchAgents', 'com.combobulate.daemon.plist'),
 };
+
+// Android platform-tools ships a sqlite3 that fails to load libc++ on this Mac.
+// Prefer the OS binary when it is present.
+export const SQLITE_BIN = process.platform === 'darwin' && fs.existsSync('/usr/bin/sqlite3')
+  ? '/usr/bin/sqlite3'
+  : 'sqlite3';
 
 export const LAUNCHD_LABEL = 'com.combobulator.daemon';
 export const LEGACY_LAUNCHD_LABEL = 'com.combobulate.daemon';
@@ -60,4 +67,30 @@ export function isIgnoredCwd(cwd) {
 // E.g. /Users/madhavan/foo -> -Users-madhavan-foo
 export function encodeClaudeProjectDir(cwd) {
   return cwd.replace(/[/.]/g, '-');
+}
+
+// T3 Code beta stores chats in statev2.sqlite. Older builds used state.sqlite.
+// COMBOBULATOR_T3_DB overrides both. Returns null when neither file exists so
+// callers do not create an empty database the app will ignore.
+export function resolveT3Db() {
+  const override = process.env.COMBOBULATOR_T3_DB?.trim();
+  if (override) return resolveUserPath(override);
+  const dir = path.join(HOME, '.t3', 'userdata');
+  const beta = path.join(dir, 'statev2.sqlite');
+  const legacy = path.join(dir, 'state.sqlite');
+  if (fs.existsSync(beta)) return beta;
+  if (fs.existsSync(legacy)) return legacy;
+  return null;
+}
+
+export function resolveUserPath(value) {
+  if (!value) return null;
+  const expanded = value.startsWith('~') ? path.join(HOME, value.slice(1)) : value;
+  return path.resolve(expanded);
+}
+
+// PATH-delimited lists, e.g. COMBOBULATOR_CURSOR_WORKSPACES=/a:/b
+export function splitList(value) {
+  if (!value || value === true) return [];
+  return String(value).split(path.delimiter).map((part) => part.trim()).filter(Boolean);
 }

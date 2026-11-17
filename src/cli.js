@@ -21,8 +21,19 @@ COMMANDS
   sync [opts]       One-shot mirror pass over recent sessions.
                     --all                ignore service start time
                     --since-hours=N      look back N hours (default 24)
-                    --limit=N            max sessions per source (default 20)
+                    --limit=N            max sessions per source (default 20).
+                                         With --cursor-workspace, the cap applies
+                                         after the workspace filter.
                     --dry-run            log what would be mirrored, write nothing
+                    --only=t3            comma list of sinks: claude,codex,t3
+                    --t3-workspace=PATH  put every mirrored chat in this T3 project.
+                                         Repeatable input filters still choose which
+                                         Cursor workspaces are read.
+                    --cursor-workspace=PATH
+                                         only Cursor chats from this workspace.
+                                         Repeat the flag for more workspaces.
+                    --cursor-workspace-prefix=PATH
+                                         this workspace and its child directories.
   fix-codex-projects
                     Register every cwd from existing mirrors in Codex Desktop's
                     workspace list. Called automatically by combobulate; rerun if
@@ -48,17 +59,30 @@ How it works
   all see the synced chats. Run \`combobulator doctor\` if something looks off.
 `;
 
+const REPEATABLE = new Set(['cursor-workspace', 'cursor-workspace-prefix']);
+
 function parseArgs(argv) {
   const out = { _: [] };
   for (const arg of argv) {
     if (arg.startsWith('--')) {
       const [k, v] = arg.slice(2).split('=');
-      out[k] = v === undefined ? true : v;
+      const value = v === undefined ? true : v;
+      if (REPEATABLE.has(k)) {
+        const current = out[k];
+        out[k] = current === undefined ? [value] : [...current, value];
+      } else {
+        out[k] = value;
+      }
     } else {
       out._.push(arg);
     }
   }
   return out;
+}
+
+function asList(value) {
+  if (!value || value === true) return [];
+  return Array.isArray(value) ? value : [value];
 }
 
 export async function main(argv) {
@@ -81,6 +105,10 @@ export async function main(argv) {
         sinceHours: args['since-hours'] ? Number(args['since-hours']) : 24,
         limit: args.limit ? Number(args.limit) : 20,
         dryRun: !!args['dry-run'],
+        only: args.only && args.only !== true ? String(args.only).split(',').map((part) => part.trim()).filter(Boolean) : null,
+        t3Workspace: args['t3-workspace'] && args['t3-workspace'] !== true ? args['t3-workspace'] : null,
+        cursorWorkspaces: asList(args['cursor-workspace']),
+        cursorWorkspacePrefixes: asList(args['cursor-workspace-prefix']),
       });
     case 'help':
     case '-h':
